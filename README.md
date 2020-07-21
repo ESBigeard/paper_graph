@@ -13,15 +13,18 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
 * [Paper2vec: Combining Graph and Text Information for Scientific Paper Representation](https://researchweb.iiit.ac.in/~soumyajit.ganguly/papers/P2v_1.pdf) **word embedding, document embedding, full-text**
    2017
    
-   
    about citations networks, 2 tasks : discover missing/possible citations (edge prediction) ; and tag papers (node classification). learns word vectors with skip-gram + skip-gram negative sampling, then use the word vectors to build document vectors. svm for node classification. logistic regression for link prediction.
    
-* [Network Representation Learning with Rich Text Information](https://www.ijcai.org/Proceedings/15/Papers/299.pdf) **textual node representation**
+* [Network Representation Learning with Rich Text Information (TADW)](https://www.ijcai.org/Proceedings/15/Papers/299.pdf) **textual node representation**
    2015 
    
    
    https://github.com/albertyang33/TADW code in matlab
    Describes a network representation method to incorporate the tf-idf matrix of a text into its graph node representation. technical math paper, I didn't understand much of the method, but they provide the code. eval : multiclass vertex classification, with svm. data : citation network or wikipedia article links. text data : title+abstract for the papers, full article for wikipedia.
+
+* [On Joint Representation Learning of Network Structur eand Document Content](https://hal.inria.fr/hal-01677137/document) **textual node representation**
+2017
+The paper says itself that it's not as good as it's 2 competitors, paper2vec and TADW. But it explains word2vec, random walk and several other embedding things very well, i recommend reading the paper for a quick overview of the field in 2017. The paper states that paper2vec and TADW are the only attempts in 2017 of learning from the textual content of the node AND the graph structure.
 
 ### other
 

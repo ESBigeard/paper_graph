@@ -26,6 +26,10 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
 2017
 The paper says itself that it's not as good as it's 2 competitors, paper2vec and TADW. But it explains word2vec, random walk and several other embedding things very well, i recommend reading the paper for a quick overview of the field in 2017. The paper states that paper2vec and TADW are the only attempts in 2017 of learning from the textual content of the node AND the graph structure.
 
+* [DocCit2Vec: Citation Recommendation viaEmbedding of Content and Structural Contexts](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9123859) 2020
+
+For the task of citation recommendation in citation networks, content of the text is more important than graph data.
+
 ### other
 
 * [BioSentVec: creating sentence embeddings for biomedical texts](https://arxiv.org/abs/1810.09302) **sentence embedding, resource, not about graphs**

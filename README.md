@@ -31,51 +31,49 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 
 *[Citation Recommendation: Approaches and Datasets](https://arxiv.org/abs/2002.06961) 2020 **review**
 
-citation recommendation = given a short text from a paper you are writing, suggest papers to cite in this short text.
+   citation recommendation = given a short text from a paper you are writing, suggest papers to cite in this short text.
 
 *[Scientific Paper Recommendation: A Survey](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8598708) 2019 **review**
 
-tf-idf. random walk. paperRank (based on pageRank)
+   tf-idf. random walk. paperRank (based on pageRank)
 
 * GOOD [DocCit2Vec: Citation Recommendation via Embedding of Content and Structural Contexts](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9123859) 2020
 
-makes embeddings between citations links and the sentence where the citation appears. embedding is based on doc2vec and hyperdoc2vec. testing datasets : ACL anthology and DBLP. Takes into account papers that are already cited in your paper, and only recommends papers you don't know already.
+   makes embeddings between citations links and the sentence where the citation appears. embedding is based on doc2vec and hyperdoc2vec. testing datasets : ACL anthology and DBLP. Takes into account papers that are already cited in your paper, and only recommends papers you don't know already.
 
-they tested that, for the task of citation recommendation in citation networks, content of the text is more important than graph data.
+   they tested that, for the task of citation recommendation in citation networks, content of the text is more important than graph data.
 
-methods cited as classical/older in introduction, not as good as embeddings : using seed papers as input, pagerank, metadata, topic modeling, "translation" of sentences into references.
+   methods cited as classical/older in introduction, not as good as embeddings : using seed papers as input, pagerank, metadata, topic modeling, "translation" of sentences into references.
 
 * [HybridCite: A Hybrid Model for Context-Aware Citation Recommendation](https://arxiv.org/abs/2002.06406) 2020
 
-Focuses on local citation recommendation : input is only a few sentences from a paper the user would be currently writing. based on hyperdoc2vec. Proposes to mix algorithms not by weights, but by something inspired from genetic algorithms. They mix one algo based on text content, and one algo based on graph structure. The idea can be adapted to any 2 aglo that can take a text context and suggest ranked papers.
+   Focuses on local citation recommendation : input is only a few sentences from a paper the user would be currently writing. based on hyperdoc2vec. Proposes to mix algorithms not by weights, but by something inspired from genetic algorithms. They mix one algo based on text content, and one algo based on graph structure. The idea can be adapted to any 2 aglo that can take a text context and suggest ranked papers.
 
-If paper A cites paper B, the citation context in paper A tells more about paper B than paper A.
+   If paper A cites paper B, the citation context in paper A tells more about paper B than paper A.
 
-dataset : microsoft academic graph (220 million papers in 2019, grows each week) doesn't include fulltext, but includes abstracts and citation contexts ; ACL anthology ; arxiv
+   dataset : microsoft academic graph (220 million papers in 2019, grows each week) doesn't include fulltext, but includes abstracts and citation contexts ; ACL anthology ; arxiv
 
 * [Linked Document Embedding for Classification](https://dl.acm.org/doi/10.1145/2983323.2983755) 2016
 
 * GOOD [hyperdoc2vec: Distributed Representations of Hypertext Documents](https://www.aclweb.org/anthology/P18-1222.pdf) 2018
 
-uses the text content of a link (more relevant for internet links than citations) and the context of the link. a problem to tackle is that new papers will have no links toward them, but we want new papers. semantics of "evaluated by [citation]" or "evaluated on corpus [citation]". dual embeddings of papers : in and out.
+   uses the text content of a link (more relevant for internet links than citations) and the context of the link. a problem to tackle is that new papers will have no links toward them, but we want new papers. semantics of "evaluated by [citation]" or "evaluated on corpus [citation]". dual embeddings of papers : in and out.
 
 "context as content" : if paper A cites paper B, we take the text in A surrounding the citation (context) and append it to the text of paper B (content)
 
-corpus : DBLP, ACL anthology and NIPS (one machine learning conference, fulltext)
+   corpus : DBLP, ACL anthology and NIPS (one machine learning conference, fulltext)
 
 
 ### other
 
 * [Not All Contexts Are Created Equal:Better Word Representations with Variable Attention](https://www.researchgate.net/publication/301446021_Not_All_Contexts_Are_Created_Equal_Better_Word_Representations_with_Variable_Attention) 2015 **word embeddings*
 
-word embeddings with attention
+   word embeddings with attention
 
-* [BioSentVec: creating sentence embeddings for biomedical texts](https://arxiv.org/abs/1810.09302) **sentence embedding, resource, not about graphs**
-    2018
+* [BioSentVec: creating sentence embeddings for biomedical texts](https://arxiv.org/abs/1810.09302) **sentence embedding, resource, not about graphs** 2018
     
     trained sent2vec on a corpus composed of pubmed articles and clinical notes (MIMIC-III), and made the resulting embeddings available
     
-* [Weighted PageRank](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.454.5022&rep=rep1&type=pdf) **not about graphs, can be used for link prediction in citation networks**
-    2004
+* [Weighted PageRank](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.454.5022&rep=rep1&type=pdf) **not about graphs, can be used for link prediction in citation networks** 2004
 
     classic paper. used on internet info retrieval, can be used in the context of a citation network to rank influential papers. Not sure this will be useful for our work, but I've seen it used in a few papers ( including [this other paper in our bib](https://openreview.net/forum?id=W3Dzaik1ipL)) so keeping it on hand

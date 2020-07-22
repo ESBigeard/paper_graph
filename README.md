@@ -29,11 +29,11 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 
 ### citation recommendation
 
-*[Citation Recommendation: Approaches and Datasets](https://arxiv.org/abs/2002.06961) 2020 **review**
+* [Citation Recommendation: Approaches and Datasets](https://arxiv.org/abs/2002.06961) 2020 **review**
 
    citation recommendation = given a short text from a paper you are writing, suggest papers to cite in this short text.
 
-*[Scientific Paper Recommendation: A Survey](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8598708) 2019 **review**
+* [Scientific Paper Recommendation: A Survey](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8598708) 2019 **review**
 
    tf-idf. random walk. paperRank (based on pageRank)
 

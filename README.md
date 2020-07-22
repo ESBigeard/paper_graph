@@ -15,13 +15,13 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
    2017
    
    about citations networks, 2 tasks : discover missing/possible citations (edge prediction) ; and tag papers (node classification). learns word vectors with skip-gram + skip-gram negative sampling, then use the word vectors to build document vectors. svm for node classification. logistic regression for link prediction.
+   [paper doesn't give code but open implementations are available](https://github.com/tianhan4/paper2vec)
    
-* GOOD [Network Representation Learning with Rich Text Information (TADW)](https://www.ijcai.org/Proceedings/15/Papers/299.pdf) **textual node representation**
+* GOOD [Network Representation Learning with Rich Text Information (TADW)](https://www.ijcai.org/Proceedings/15/Papers/299.pdf) **textual node representation, full-text**
    2015 
-   
-   
-   https://github.com/albertyang33/TADW code in matlab
-   Describes a network representation method to incorporate the tf-idf matrix of a text into its graph node representation. technical math paper, I didn't understand much of the method, but they provide the code. eval : multiclass vertex classification, with svm. data : citation network or wikipedia article links. text data : title+abstract for the papers, full article for wikipedia.
+
+   [code available](https://github.com/albertyang33/TADW)
+   Describes a network representation method to incorporate the tf-idf matrix of a text into its graph node representation. Based on deepwalk (Text Associated Deep Walk). eval : multiclass vertex classification, with svm. data : citation network or wikipedia article links. text data : title+abstract for the papers, full article for wikipedia.
 
 * [On Joint Representation Learning of Network Structur eand Document Content](https://hal.inria.fr/hal-01677137/document) **textual node representation**
 2017
@@ -31,6 +31,12 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 ### citation recommendation
 
 *[Citation Recommendation: Approaches and Datasets](https://arxiv.org/abs/2002.06961) 2020 **review**
+
+citation recommendation = given a short text from a paper you are writing, suggest papers to cite in this short text.
+
+*[Scientific Paper Recommendation: A Survey](Scientific Paper Recommendation: A Survey) 2019 **review**
+
+tf-idf. random walk. paperRank (based on pageRank)
 
 * GOOD [DocCit2Vec: Citation Recommendation via Embedding of Content and Structural Contexts](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9123859) 2020
 

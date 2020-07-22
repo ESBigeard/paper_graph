@@ -13,8 +13,10 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
 * GOOD [Paper2vec: Combining Graph and Text Information for Scientific Paper Representation](https://researchweb.iiit.ac.in/~soumyajit.ganguly/papers/P2v_1.pdf) **word embedding, document embedding, full-text**
    2017
    
-   about citations networks, 2 tasks : discover missing/possible citations (edge prediction) ; and tag papers (node classification). learns word vectors with skip-gram + skip-gram negative sampling, then use the word vectors to build document vectors. svm for node classification. logistic regression for link prediction.
+   about citations networks. uses doc2vec as a first step to learn only from text, and use them as pre-trained weight. uses text similarity to add edges. they learn from the graph using some kind of random walk. svm for node classification. logistic regression for link prediction.
    [paper doesn't give code but open implementations are available](https://github.com/tianhan4/paper2vec)
+   evaluated on 2 tasks : discover missing/possible citations (edge prediction) ; and tag papers (node classification).
+   dataset : CORA and DBLP
    
 * GOOD [Network Representation Learning with Rich Text Information (TADW)](https://www.ijcai.org/Proceedings/15/Papers/299.pdf) **textual node representation, full-text**
    2015 

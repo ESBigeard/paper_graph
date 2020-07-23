@@ -30,7 +30,11 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
 The paper says itself that it's not as good as it's 2 competitors, paper2vec and TADW. But it explains word2vec, random walk and several other embedding things very well, i recommend reading the paper for a quick overview of the field in 2017. The paper states that paper2vec and TADW are the only attempts in 2017 of learning from the textual content of the node AND the graph structure.
 
 
-### citation recommendation
+### citation/paper recommendation
+
+citation recommendation = focus on a short part of a paper, only a few sentences, and suggest papers that might be cited here. Intented to be used by researchers while writing a paper
+
+paper recommendation = Input is a whole paper, or several papers, or more. Intended to suggest papers to a researcher in a more general context
 
 * [Citation Recommendation: Approaches and Datasets](https://arxiv.org/abs/2002.06961) 2020 **review**
 
@@ -52,7 +56,7 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 
 * [HybridCite: A Hybrid Model for Context-Aware Citation Recommendation](https://arxiv.org/abs/2002.06406) 2020
 
-   Focuses on local citation recommendation : input is only a few sentences from a paper the user would be currently writing. based on hyperdoc2vec. Proposes to mix algorithms not by weights, but by something inspired from genetic algorithms. They mix one algo based on text content, and one algo based on graph structure. The idea can be adapted to any 2 aglo that can take a text context and suggest ranked papers.
+   based on hyperdoc2vec. Proposes to mix algorithms not by weights, but by something inspired from genetic algorithms. They mix one algo based on text content, and one algo based on graph structure. The idea can be adapted to any 2 aglo that can take a text context and suggest ranked papers.
 
    If paper A cites paper B, the citation context in paper A tells more about paper B than paper A.
 
@@ -68,9 +72,11 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 
    corpus : DBLP, ACL anthology and NIPS (one machine learning conference, fulltext)
 
-* [Docear software](https://www.researchgate.net/publication/265412702_The_Architecture_and_Datasets_of_Docear%27s_Research_Paper_Recommender_System) 2014 **paper rec**
+* GOOD [Docear software](https://www.researchgate.net/publication/265412702_The_Architecture_and_Datasets_of_Docear%27s_Research_Paper_Recommender_System) 2014 **paper rec**
     
     Citation manager software that uses the user's library, including the organisation (categories, custom tags, summary/main ideas written by the user...) to recommend new papers. It's a clever way to get the user to do the work. The user can also highlight and annotate specific parts of the pdf in their library. Nodes can be : a paper, category, tag, annotation... The user can also rate the recommendations.
+
+    The idea is super interesting. Developping something similar would be far out of the scope of the project, but we should keep it in mind.
 
 
 ### other

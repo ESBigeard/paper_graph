@@ -1,4 +1,5 @@
 
+
 # Paper Graph
 Dev/tools repo for a project about scientific papers mining to construct graphs
 
@@ -39,6 +40,8 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 
    tf-idf. random walk. paperRank (based on pageRank)
 
+   content-based : input is a researcher's papers, output is papers they will want to read.
+
 * GOOD [DocCit2Vec: Citation Recommendation via Embedding of Content and Structural Contexts](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9123859) 2020
 
    makes embeddings between citations links and the sentence where the citation appears. embedding is based on doc2vec and hyperdoc2vec. testing datasets : ACL anthology and DBLP. Takes into account papers that are already cited in your paper, and only recommends papers you don't know already.
@@ -57,13 +60,17 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 
 * [Linked Document Embedding for Classification](https://dl.acm.org/doi/10.1145/2983323.2983755) 2016
 
-* GOOD [hyperdoc2vec: Distributed Representations of Hypertext Documents](https://www.aclweb.org/anthology/P18-1222.pdf) 2018
+* GOOD [hyperdoc2vec: Distributed Representations of Hypertext Documents](https://www.aclweb.org/anthology/P18-1222.pdf) 2018 **citation rec**
 
    uses the text content of a link (more relevant for internet links than citations) and the context of the link. a problem to tackle is that new papers will have no links toward them, but we want new papers. semantics of "evaluated by [citation]" or "evaluated on corpus [citation]". dual embeddings of papers : in and out.
 
-"context as content" : if paper A cites paper B, we take the text in A surrounding the citation (context) and append it to the text of paper B (content)
+   "context as content" : if paper A cites paper B, we take the text in A surrounding the citation (context) and append it to the text of paper B (content)
 
    corpus : DBLP, ACL anthology and NIPS (one machine learning conference, fulltext)
+
+* [Docear software](https://www.researchgate.net/publication/265412702_The_Architecture_and_Datasets_of_Docear%27s_Research_Paper_Recommender_System) 2014 **paper rec**
+    
+    Citation manager software that uses the user's library, including the organisation (categories, custom tags, summary/main ideas written by the user...) to recommend new papers. It's a clever way to get the user to do the work. The user can also highlight and annotate specific parts of the pdf in their library. Nodes can be : a paper, category, tag, annotation... The user can also rate the recommendations.
 
 
 ### other
@@ -79,3 +86,7 @@ The paper says itself that it's not as good as it's 2 competitors, paper2vec and
 * [Weighted PageRank](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.454.5022&rep=rep1&type=pdf) **not about graphs, can be used for link prediction in citation networks** 2004
 
     classic paper. used on internet info retrieval, can be used in the context of a citation network to rank influential papers. Not sure this will be useful for our work, but I've seen it used in a few papers ( including [this other paper in our bib](https://openreview.net/forum?id=W3Dzaik1ipL)) so keeping it on hand
+
+* [Citation-Enhanced Keyphrase Extraction from Research Papers: A Supervised Approach](https://www.aclweb.org/anthology/D14-1150/) 2014
+
+

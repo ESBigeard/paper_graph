@@ -42,7 +42,7 @@ paper recommendation = Input is a whole paper, or several papers, or more. Inten
 
 * [Scientific Paper Recommendation: A Survey](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8598708) 2019 **review**
 
-   tf-idf. random walk. paperRank (based on pageRank)
+   tf-idf. random walk. paperRank (based on pageRank). hybrid methods.
 
    content-based : input is a researcher's papers, output is papers they will want to read.
 
@@ -78,6 +78,22 @@ paper recommendation = Input is a whole paper, or several papers, or more. Inten
 
     The idea is super interesting. Developping something similar would be far out of the scope of the project, but we should keep it in mind.
 
+* [Scientific Article Recommendation: Exploiting Common Author Relations and Historical Preferences](http://thealphalab.org/papers/ScientificArticleRecommendationExploitingCommonAuthorRelationsandHistoricalPreferences.pdf) 2016
+
+    Author-based system. dataset : CiteULike, an online citation manager that makes its data available.
+
+* [Cross-domain item recommendation based on user similarity](https://www.semanticscholar.org/paper/Cross-domain-item-recommendation-based-on-user-Xu-Jiang/797ed887d40cdcd3ef83b2781d979c351787dea5) 2016
+
+   another author-based system
+
+* [PaperRank](https://ieeexplore.ieee.org/document/5171002) 2009
+
+   based on [Weighted PageRank](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.454.5022&rep=rep1&type=pdf) (not about graphs, can be used for link prediction in citation networks, 2004)
+
+    PageRank : classic paper. used on internet info retrieval, can be used in the context of a citation network to rank influential papers. Not sure this will be useful for our work, but I've seen it used in a few papers ( including [this other paper in our bib](https://openreview.net/forum?id=W3Dzaik1ipL)) so keeping it on hand
+
+* [VOPRec: Vector Representation Learning of Papers with Text Information and Structural Identity for Recommendation](https://www.researchgate.net/publication/324787467_VOPRec_Vector_Representation_Learning_of_Papers_with_Text_Information_and_Structural_Identity_for_Recommendation) 2018 **paper rec**
+
 
 ### other
 
@@ -89,9 +105,6 @@ paper recommendation = Input is a whole paper, or several papers, or more. Inten
     
     trained sent2vec on a corpus composed of pubmed articles and clinical notes (MIMIC-III), and made the resulting embeddings available
     
-* [Weighted PageRank](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.454.5022&rep=rep1&type=pdf) **not about graphs, can be used for link prediction in citation networks** 2004
-
-    classic paper. used on internet info retrieval, can be used in the context of a citation network to rank influential papers. Not sure this will be useful for our work, but I've seen it used in a few papers ( including [this other paper in our bib](https://openreview.net/forum?id=W3Dzaik1ipL)) so keeping it on hand
 
 * [Citation-Enhanced Keyphrase Extraction from Research Papers: A Supervised Approach](https://www.aclweb.org/anthology/D14-1150/) 2014
 

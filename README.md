@@ -10,7 +10,7 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
 
 Outside of domain-specific stuff, **paper2vec** (2017) and **tadw** (2015) are the state of the art to include textual content and graph information into the node's embedding. Methods that use the text and the graph to create embeddings usually test against methods that use one or the other, making it difficult to make comparisons.
 
-**BioWordVec** (2019) has trained embeddings available, and the code to generate them available as well. Uses mesh. We should use them, and so choose a method that uses word embeddings. Paper2vec starts from word embeddings, which makes it possible to combine with biowordvec. I'm unsure the same can be said of TADW ?
+**BioWordVec** (2019) has trained embeddings available, and the code to generate them available as well. Uses mesh. We should use them, and so choose a method that uses word embeddings. Paper2vec starts from word embeddings, which makes it possible to combine with biowordvec. I'm unsure the same can be said of TADW ? The only problem is that we don't have a standard corpus of medical papers, so it will be difficult to compare or method to others if we want to leverage biowordvec.
 
 Going into domain-specific tasks, **citation recommendation** is very close to what we want. It consists of, given a very small text from a paper, suggesting citations to go with this specific part of the paper. It's intended to be used by authors as they write an article. All methods use either the full text or a window of context around citations in the full text. **DocCit2Vec** (2020) is promising. **Hyperdoc2vec** (2018) is a standard, intended more to crawl the internet but used in several papers for citation networks.
 

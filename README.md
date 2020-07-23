@@ -38,7 +38,6 @@ paper recommendation = Input is a whole paper, or several papers, or more. Inten
 
 * [Citation Recommendation: Approaches and Datasets](https://arxiv.org/abs/2002.06961) 2020 **review**
 
-   citation recommendation = given a short text from a paper you are writing, suggest papers to cite in this short text.
 
 * [Scientific Paper Recommendation: A Survey](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8598708) 2019 **review**
 

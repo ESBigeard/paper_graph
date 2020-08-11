@@ -5,6 +5,8 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
 
 [bibliography has been moved to its own file](REFERENCES.md)
 
+If you want to execute the code you can find the corpus [https://www.dropbox.com/s/0bc6c2fmhz526mo/fulltext_tei.tar.gz?dl=0](here). It's TEI XML files.
+
 ## Working pipeline
 
 MAIN : PDF of articles collected by canceropole -> grobit -> TEI XML files -> [generate_gephi_csv.py](generate_gephi_csv.py) -> nodes.csv and edges.csv -> aman's script to add similar nodes and coordinates -> [convert_id_to_tile.py](convert_id_to_title) (aman gives similar nodes by id. this converts the id to the label) -> nodes.csv and edges.csv -> gephi -> GEXF XML file -> [this javascript website with few changes](https://github.com/raphv/gexf-js)

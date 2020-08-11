@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
-"""sort une hiérarchie basique/simplifiée à partir du mesh xml de l'atilf"""
+"""makes a basic hierarchy out of the simplified mesh xml file from atilf"""
 
 import csv
 from rdflib import Graph

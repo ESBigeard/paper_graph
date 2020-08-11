@@ -11,7 +11,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from collections import defaultdict
 from collections import OrderedDict
-from rake_nltk import Rake
+#from rake_nltk import Rake
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -31,7 +31,7 @@ nodes=[]
 edges=[]
 keywords_id_dict={}
 
-rake=Rake(max_length=4)
+#rake=Rake(max_length=4)
 
 idf=utilsperso.finish_idf("27_07_tei_idf.pickle")
 

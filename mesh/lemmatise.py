@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
+""" one-time script to lemmatize the mesh"""
 
 import csv
 import spacy

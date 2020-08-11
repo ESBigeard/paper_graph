@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
+"""used to detect loop in the mesh hierarchy. Loops lead to recursive errors and should be removed"""
 
 import os,sys,csv
 from collections import defaultdict

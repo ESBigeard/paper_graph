@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
-"""This module is used by several other scripts, be prudent making changes"""
+"""This module is used by several other scripts, be prudent making changes. Can also be used alone to generate an idf"""
 
 import re
 import spacy
@@ -286,7 +286,6 @@ def preprocess_text(soup,keep_all_words=False,separate_sentences=False):
 
 
 if __name__=="__main__":
-	pass
 
 	#generate idf for a folder
 	directory="fulltext_tei"

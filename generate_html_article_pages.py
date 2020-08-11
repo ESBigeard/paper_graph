@@ -1,7 +1,6 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
-"""didn't test after separating fom generate_gephi_csv.py ! might not work !
-used to generate the folder with each paper as an html page, where you can read the contents of the paper with calculated keywords and most important sentences in yellow"""
+"""used to generate the folder with each paper as an html page, where you can read the contents of the paper with most important sentences in yellow"""
 
 import unicodedata
 import re

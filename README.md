@@ -5,7 +5,7 @@ Dev/tools repo for a project about scientific papers mining to construct graphs
 
 [bibliography has been moved to its own file](REFERENCES.md)
 
-If you want to execute the code you can find the corpus [https://www.dropbox.com/s/0bc6c2fmhz526mo/fulltext_tei.tar.gz?dl=0](here). It's TEI XML files.
+If you want to execute the code you can find the corpus [here](https://www.dropbox.com/s/0bc6c2fmhz526mo/fulltext_tei.tar.gz?dl=0]). It's TEI XML files.
 
 ## Working pipeline
 

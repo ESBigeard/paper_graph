@@ -3,7 +3,14 @@
 # Paper Graph
 Dev/tools repo for a project about scientific papers mining to construct graphs
 
-[bibliography has been moved to its own file](REFERENCES.txt)
+[bibliography has been moved to its own file](REFERENCES.md)
+
+## Working pipeline
+
+MAIN : PDF of articles collected by canceropole -> grobit -> TEI XML files -> [generate_gephi_csv.py](generate_gephi_csv.py) -> nodes.csv and edges.csv -> aman's script to add similar nodes and coordinates -> [convert_id_to_tile.py](convert_id_to_title) (aman gives similar nodes by id. this converts the id to the label) -> nodes.csv and edges.csv -> gephi -> GEXF XML file -> [this javascript website with few changes](https://github.com/raphv/gexf-js)
+
+For the html files displaying the content of the articles, input the TEI XML files into [generate_html_article_pages.py](generate_html_article_pages.py)
+
 
 ## Main scripts and useful stuff
 

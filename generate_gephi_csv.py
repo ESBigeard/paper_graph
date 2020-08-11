@@ -697,16 +697,10 @@ def stats_keywords(dict_keywords):
 
 if __name__=="__main__":
 	directory="fulltext_tei"
-	#directory="tmp_folder"
-
-	if not os.path.exists(directory):
-		sys.stderr.write("You forgot to connect the hard disk you dummy\n")
-		raise FileNotFoundError
 
 	#test_keywords(directory)
 	print_csv_for_gephi(directory,"abstract",option_separate_paper_parts=False,option_prune_keywords=True)
 	#stats_keywords(tmp_keywords)
-	exit()
 
 
 

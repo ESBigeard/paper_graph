@@ -9,6 +9,8 @@ If you want to execute the code you can find the corpus [here](https://www.dropb
 
 ## Working pipeline
 
+Various steps need an idf inside a .pickle file. I've added one to the repository for convenience, but you can generate it with utilsperso.py The idf must be trained on a corpus identical or similar than the corpus we're working on.
+
 MAIN : PDF of articles collected by canceropole -> grobit -> TEI XML files -> [generate_gephi_csv.py](generate_gephi_csv.py) -> nodes.csv and edges.csv -> aman's script to add similar nodes and coordinates -> [convert_id_to_tile.py](convert_id_to_title) (aman gives similar nodes by id. this converts the id to the label) -> nodes.csv and edges.csv -> gephi -> GEXF XML file -> [this javascript website with few changes](https://github.com/raphv/gexf-js)
 
 For the html files displaying the content of the articles, input the TEI XML files into [generate_html_article_pages.py](generate_html_article_pages.py)

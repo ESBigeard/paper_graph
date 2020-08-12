@@ -34,7 +34,7 @@ keywords_id_dict={}
 
 #rake=Rake(max_length=4)
 
-idf=utilsperso.finish_idf("27_07_tei_idf.pickle")
+idf=utilsperso.finish_idf("27_07_tei_idf.pickle") #put here the .pickle file containing an idf
 
 mesh_hierarchy_up=defaultdict(list)
 mesh_hierarchy_down=defaultdict(list)

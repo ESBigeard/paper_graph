@@ -141,7 +141,7 @@ def recursive_add_hyperonyms_mesh(label,latest_id):
 			if label_up not in keywords_id_dict:
 				latest_id+=1
 				keywords_id_dict[label_up]=latest_id
-				nodes.append([latest_id,label_up,"keyword","",""])
+				nodes.append([latest_id,label_up,"keyword","","",""])
 			id_1=keywords_id_dict[label]
 			id_2=keywords_id_dict[label_up]
 			weight=0.1
@@ -340,17 +340,28 @@ def separate_sections_article(soup):
 	return output
 
 
-def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_keywords=True, option_separate_paper_parts=True):
+def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_keywords=True, option_separate_paper_parts=True,option_fname_out=False,option_communities=False):
 	""" main function
 	option_used_text=abstract or fulltext. do we look for keywords in the full text or only the abstract ?
 	option_prune_keywords=True/False. do we keep all keywords found at least once in the text, or only the most relevant ?
-	option_separate_paper_parts=True/False. is each article a node, or separate nodes for intro/method/ccl/etc ?"""
+	option_separate_paper_parts=True/False. is each article a node, or separate nodes for intro/method/ccl/etc ?
+	option_fname_out : name of output csv files. default : fulltext or abstract depending of option_used_text"""
+	
 
 
 	global nodes
 	global edges
 	global keywords_id_dict
 	#the global are necessary because a recursive function edits them. ok, not necessary, but a lot more convenient.
+
+	if option_communities: #tmp for august batch
+		comunities={}
+		with open("fulltext_tei/august_batch/list.txt",mode="r",encoding="utf-8") as f:
+			for l in f:
+				l=l.strip()
+				l=l.split(" ")
+				a="".join(l[0:-1])
+				comunities[a]=l[-1]
 
 	if option_used_text not in ("fulltext", "abstract"):
 		raise ValueError
@@ -362,7 +373,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 	keywords_id_dict={} #dict["text of keyword"]=id of keyword
 			#the text of the author/keyword in key is used to detect duplicates
 	nodes=[] #the info to output in the csv for nodes
-	nodes.append(["id","label","type","fulltext_link","abstract"])
+	nodes.append(["id","label","type","fulltext_link","abstract","comunity"])
 	previous_id=-1 #a different id for each node. articles, titles, keywords, etc, all share the same id numerotation
 	edges=[] #the info to output in the csv for edges
 	edges.append(["source","target","type","weight"])
@@ -386,7 +397,12 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 					article_id=previous_id
 					abstract=soup.abstract.getText() #to display to the user on the left column
 					url="elisebigeard.yo.fr/gephi_files/fulltexts/"+fname[:-7]+"html"
-					nodes.append([article_id,article_title,"article",url,abstract])
+					if option_communities:
+						comu=comunities[fname.replace(" ","")]
+					else:
+						comu=""
+
+					nodes.append([article_id,article_title,"article",url,abstract,comu])
 					#tmp_out_keywords[article_id]={}
 
 					#author nodes, attached to article node
@@ -401,7 +417,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 							previous_id+=1
 							authors_id_dict[author]=previous_id
 							author_id=previous_id
-							nodes.append([author_id,author,"author","",""])
+							nodes.append([author_id,author,"author","","",""])
 						else:
 							author_id=authors_id_dict[author]
 
@@ -432,7 +448,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 								previous_id+=1
 								keywords_id_dict[keyword]=previous_id
 								keyword_id=previous_id
-								nodes.append([keyword_id,keyword,"keyword","",""])
+								nodes.append([keyword_id,keyword,"keyword","","",""])
 							else:
 								keyword_id=keywords_id_dict[keyword]
 
@@ -472,7 +488,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 							previous_id+=1
 							section_node_id=previous_id
 							title=section_title+" : "+article_title[:10]+"..."
-							nodes.append([section_node_id,title,"article_section_"+section_title,"",""])
+							nodes.append([section_node_id,title,"article_section_"+section_title,"","",""])
 							edges.append([article_id,section_node_id,"undirected",1])
 
 						#detect mesh keywords
@@ -539,7 +555,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 								previous_id+=1
 								keywords_id_dict[keyword_propre]=previous_id
 								keyword_id=previous_id
-								nodes.append([keyword_id,keyword_propre,"keyword","",""])
+								nodes.append([keyword_id,keyword_propre,"keyword","","",""])
 							else:
 								keyword_id=keywords_id_dict[keyword_propre]
 
@@ -580,7 +596,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 					if label2 not in keywords_id_dict:
 						previous_id+=1
 						keywords_id_dict[label2]=previous_id
-						nodes.append([previous_id,label2,"keyword","",""])
+						nodes.append([previous_id,label2,"keyword","","",""])
 				if label2 in keywords_id_dict:
 					id_2=keywords_id_dict[label2]
 					edges.append([id_1,id_2,"directed",1])
@@ -594,7 +610,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 				if label2 not in keywords_id_dict:
 					previous_id+=1
 					keywords_id_dict[label2]=previous_id
-					nodes.append([previous_id,label2,"keyword","",""])
+					nodes.append([previous_id,label2,"keyword","","",""])
 			if label2 in keywords_id_dict:
 				id_2=keywords_id_dict[label2]
 				edges.append([id_2,id_1,"directed",1]) #reverse direction
@@ -620,14 +636,17 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 
 
 
-	if option_separate_paper_parts:
-		fname="separate_paper_parts"
-	elif option_used_text=="fulltext":
-		fname="fulltext"
-	elif option_used_text=="abstract":
-		fname="abstract"
+	if option_fname_out :
+		fname=option_fname_out
 	else:
-		raise Exception("Problem with options in print_csv_for_gephi()")
+		if option_separate_paper_parts:
+			fname="separate_paper_parts"
+		elif option_used_text=="fulltext":
+			fname="fulltext"
+		elif option_used_text=="abstract":
+			fname="abstract"
+		else:
+			raise Exception("Problem with options in print_csv_for_gephi()")
 
 	#write nodes
 	with open(fname+"_nodes.csv",mode="w", encoding="utf-8") as f:
@@ -697,10 +716,10 @@ def stats_keywords(dict_keywords):
 	plt.show()
 
 if __name__=="__main__":
-	directory="fulltext_tei" #change this as needed
+	directory="fulltext_tei/august_batch" #change this as needed
 
 	#test_keywords(directory)
-	print_csv_for_gephi(directory,"abstract",option_separate_paper_parts=False,option_prune_keywords=True)
+	print_csv_for_gephi(directory,"fulltext",option_separate_paper_parts=False,option_prune_keywords=True,option_fname_out="august_commu",option_communities=True)
 	#stats_keywords(tmp_keywords)
 
 

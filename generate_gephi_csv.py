@@ -342,10 +342,11 @@ def separate_sections_article(soup):
 
 def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_keywords=True, option_separate_paper_parts=True,option_fname_out=False,option_communities=False):
 	""" main function
-	option_used_text=abstract or fulltext. do we look for keywords in the full text or only the abstract ?
+	option_used_text=abstract, fulltext or main_sections. in which text do we look for keywords ? main_sections is abstract + introduction + methods + conclusion
 	option_prune_keywords=True/False. do we keep all keywords found at least once in the text, or only the most relevant ?
 	option_separate_paper_parts=True/False. is each article a node, or separate nodes for intro/method/ccl/etc ?
-	option_fname_out : name of output csv files. default : fulltext or abstract depending of option_used_text"""
+	option_fname_out : name of output csv files. default : fulltext or abstract depending of option_used_text
+	option_communities : tmp for august batch, leave false in normal use"""
 	
 
 
@@ -363,7 +364,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 				a="".join(l[0:-1])
 				comunities[a]=l[-1]
 
-	if option_used_text not in ("fulltext", "abstract"):
+	if option_used_text not in ("fulltext", "abstract","main_sections"):
 		raise ValueError
 	
 	if option_separate_paper_parts:
@@ -373,7 +374,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 	keywords_id_dict={} #dict["text of keyword"]=id of keyword
 			#the text of the author/keyword in key is used to detect duplicates
 	nodes=[] #the info to output in the csv for nodes
-	nodes.append(["id","label","type","fulltext_link","abstract","comunity"])
+	nodes.append(["id","label","type","fulltext_link","abstract","community"])
 	previous_id=-1 #a different id for each node. articles, titles, keywords, etc, all share the same id numerotation
 	edges=[] #the info to output in the csv for edges
 	edges.append(["source","target","type","weight"])
@@ -424,7 +425,8 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 						#add edge
 						edges.append([article_id,author_id,"undirected",1])
 
-					#explicitly given keywords, full paper level
+					#retrieve keywords explicitly given by the authors
+					#those keywords are associated with the full paper, even if paper sections are in separate nodes
 					a=soup.keywords
 					if a:
 						for term in a.find_all("term"): #for keyword in keywords
@@ -440,7 +442,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 								#print("mesh synonym detected",keyword,mesh_synonyms[keyword])
 								keyword=mesh_synonyms[keyword]
 
-							if keyword in keyword_exclude:
+							if keyword in keyword_exclude: #ignore that keyword, it's junk
 								continue
 
 							#add node if doesn't exist
@@ -457,7 +459,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 
 
 
-					#text
+					#process the text
 					#needed to detect keywords
 
 					#separates sections and transform into spacy text
@@ -477,7 +479,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 
 					#create nodes for paper sections and detect keywords
 					for section_title in sections:
-						sys.stderr.write(section_title+"\n")
+						#sys.stderr.write("processing "+section_title+"\n")
 						text=sections[section_title]
 						text=[x.lemma_ for x in text]
 						text=" ".join(text)
@@ -494,12 +496,13 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 						#detect mesh keywords
 						keywords_found=defaultdict(int)
 
-						if option_prune_keywords:
+						#remove part of the detected keywords to keep only the most relevant ones
+						if option_prune_keywords: 
 
 							i_keywords=0
 							max_keywords=10 #how many keywords per article to keep
 							
-							if False: #keep top keywords per rake score which are also a mesh term
+							if False: #among keywords that are a mesh term, keep top keywords per rake score
 								rake.extract_keywords_from_text(text)
 								top=rake.get_ranked_phrases() #here "phrases" mean multiword expressions, not sentences.
 								for multiword in top:
@@ -512,9 +515,9 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 											if i_keywords>max_keywords:
 												break
 
-							else: #keep top keywords per tf-idf score, which are also a mesh term
+							else: #among keywords that are a mesh term, keep top keywords per tf-idf score
 								if option_separate_paper_parts:
-									#tf=utilsperso.count_text_tfidf(text,idf[section_title]) #if you want to have separate idf's for each section
+									#tf=utilsperso.count_text_tfidf(text,idf[section_title]) #if you want to have separate idf's for each section. didn't work well so commented out
 									tf=utilsperso.count_text_tfidf(text,idf)
 								else:
 									tf=utilsperso.count_text_tfidf(text,idf)
@@ -525,29 +528,26 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 										if i_keywords>max_keywords:
 											break
 
+						#keep any mesh keyword that appear at least once in the text
 						else:
-							#we keep any mesh keyword that appear at least once in the text
 							for keyword in mesh_keywords:
 								if " "+keyword+" " in text.lower():
 									weight=text.count(" "+keyword+" ")
 									keywords_found[keyword]=weight
 
-						#edit idf
-						#words=" ".join(keywords_found.keys())
-						#utilsperso.edit_idf([words],idf_file=section_title+".idf.pickle",filetype="raw_text")
-						#tmp_out_keywords[article_id][section_title]=keywords_found
 
-						#add the found keywords to the nodes/edges
+
+						#add the keywords we found to the nodes/edges
 						for keyword in keywords_found:
 							
 
-
+							#get the printable/clean version of the keyword
 							keyword_propre=keyword
 							if keyword in mesh_synonyms:
 								#print("mesh synonym detected",keyword,mesh_synonyms[keyword])
 								keyword_propre=mesh_synonyms[keyword]
 
-							if keyword_propre in keyword_exclude:
+							if keyword_propre in keyword_exclude: #this keyword is garbage, ignore it
 								continue
 
 							#add node if doesn't exist
@@ -572,18 +572,13 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 	except KeyboardInterrupt:
 		pass #used to break the loop when we have enough files processed
 	
-	#TMP
-	#return tmp_out_keywords
 
-	#edges between keywords
-	for label1 in keywords_id_dict.copy(): #copy because we add new nodes during the loop
+	#add edges between keywords according to mesh hierarchy
+	for label1 in keywords_id_dict.copy(): #copy because we add new nodes during the loop, which python doesn't allow
 		id_1=keywords_id_dict[label1]
 
-		#mesh hierarchy
-
-		#recursively adds all levels of hyperonyms
+		#recursively adds all levels of hyperonyms (more generic, upper-level terms)^
 		# variables nodes, edges and keywords_id_dict are globally changed inside the function to add data.
-		print("previousid",previous_id)
 		previous_id=recursive_add_hyperonyms_mesh(label1,previous_id)
 
 		#old version, fetches only one level higher
@@ -606,7 +601,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 		for label2 in hyponymes: #list of labels
 			
 			#fetch id or create node
-			if False: #disable to avoir creating new nodes to avoid bloating the graph
+			if False: #disable to avoid creating new nodes to avoid bloating the graph
 				if label2 not in keywords_id_dict:
 					previous_id+=1
 					keywords_id_dict[label2]=previous_id
@@ -633,7 +628,6 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 					continue
 				
 				edges.append([article_source,article_target,"undirected",score])
-
 
 
 	if option_fname_out :
@@ -719,7 +713,7 @@ if __name__=="__main__":
 	directory="fulltext_tei/august_batch" #change this as needed
 
 	#test_keywords(directory)
-	print_csv_for_gephi(directory,"fulltext",option_separate_paper_parts=False,option_prune_keywords=True,option_fname_out="august_commu",option_communities=True)
+	print_csv_for_gephi(directory,"fulltext",option_separate_paper_parts=False,option_prune_keywords=True,option_fname_out="august_commu",option_communities=False)
 	#stats_keywords(tmp_keywords)
 
 

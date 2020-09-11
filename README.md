@@ -95,4 +95,4 @@ will be added later
 
 [for the most similar nodes added by aman, replace the ID of each node by its label](convert_id_to_title.py)
 
-[generate_aman_features.py](for the paper, generates the .dat files that aman uses to run the experiments)
+[for the paper, generates the .dat files that aman uses to run the experiments](generate_aman_features.py)

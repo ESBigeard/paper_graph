@@ -41,6 +41,15 @@ mesh_hierarchy_down=defaultdict(list)
 mesh_keywords=set([])
 keyword_exclude=set([])
 
+tmp_missing_titles={}
+with open("missing_titles.txt",mode="r",encoding="utf-8") as f:
+	for l in f:
+		l=l.strip()
+		l=l.split("\t")
+		fname=l[0].lower()
+		fname=fname.replace(" ","")
+		tmp_missing_titles[fname]=l[1]
+
 with open("mesh/exclude_list.txt",mode="r",encoding="utf-8") as f:
 	for l in f:
 		l=l.strip()
@@ -121,7 +130,7 @@ def clean_string(s):
 
 	return s3
 
-def recursive_add_hyperonyms_mesh(label,latest_id):
+def recursive_add_hyperonyms_mesh(label,latest_id,nb_columns):
 	"""given a mesh label present in mesh_hierarchy_up, fetches info for all of its hyperonyms, recursively. adds edges and nodes to global variables "nodes" and "edges". "keywords_id_dict" is also globally edited. Yes it's messy, sorry future me
 	mesh_hierarchy_up is a dict[label]=[label_up,label_up] where label_up is an hyperonym of label"""
 
@@ -141,7 +150,9 @@ def recursive_add_hyperonyms_mesh(label,latest_id):
 			if label_up not in keywords_id_dict:
 				latest_id+=1
 				keywords_id_dict[label_up]=latest_id
-				nodes.append([latest_id,label_up,"keyword","","",""])
+				row=[latest_id,label_up,"keyword"]
+				row += [''] * (nb_columns - len(row)) #pads empty columns
+				nodes.append(row)
 			id_1=keywords_id_dict[label]
 			id_2=keywords_id_dict[label_up]
 			weight=0.1
@@ -151,7 +162,7 @@ def recursive_add_hyperonyms_mesh(label,latest_id):
 
 			#recurse toward higher hyperonym
 			try:
-				latest_id=recursive_add_hyperonyms_mesh(label_up,latest_id)
+				latest_id=recursive_add_hyperonyms_mesh(label_up,latest_id,nb_columns)
 			except RecursionError:
 				raise RecursionError("Maximum recursion depth reached. It's likely the mesh hierarchy data makes a loop. Investigate these nodes : "+label+" ; "+label_up)
 			#print("out recursive",label,label_up,latest_id)
@@ -312,19 +323,24 @@ def test_keywords(root_directory):
 				print()
 				print()
 
-def separate_sections_article(soup):
+def separate_sections_article(soup,keep_all_words=True):
+	"""used to separate an article into several nodes, each node being a part of the article (introduction, methods, etc)"""
 
 	current_main_title="trash"
 	title_clean="trash"
 	output=defaultdict(list) #key=main section title. value=list of sentences
-	output["abstract"]=utilsperso.preprocess_text(soup.abstract,keep_all_words=True,separate_sentences=False)
+	output["abstract"]=utilsperso.preprocess_text(soup.abstract,keep_all_words=keep_all_words,separate_sentences=False)
+	output["introduction"]=[""] #initalised to prevent a bug downstream if those sections don't exist
+	output["material and method"]=[""]
+	output["conclusion"]=[""]
 	soup.abstract.decompose()
-	for tag in soup.find_all(["head","p"]): #iterate through head and p tags in order. head=section title. p=content of the section
+	for tag in soup.find_all(["head","p"]): #iterate through head and p tags in the same order they come through the file. head=section title. p=content of the section. So we read the title of a section, followed by its content
 		if tag.name=="head":
+			#detect if this is a section title we are interested in (introduction, methods...)
 
-			title_clean=utilsperso.process_section_title(tag.getText()) 
+			title_clean=utilsperso.process_section_title(tag.getText()) #title_clean is either something like "introduction" if it's an important section, "other" if it's something not recognized, or is empty if it's a trash section such as "acknowledgments"
 			if title_clean:
-				if title_clean == "other": #random title in the body
+				if title_clean == "other": #random title in the body. it may be a subtitle inside a main section, so we want to keep it attached to the current title_clean
 					pass
 				else: #a maintitle such as "introduction"
 					current_main_title=title_clean
@@ -335,7 +351,7 @@ def separate_sections_article(soup):
 			if current_main_title=="trash":
 				continue #we don't keep this part at all
 			else:
-				text=utilsperso.preprocess_text(tag,keep_all_words=True,separate_sentences=False) #we need the stopwords for rake
+				text=utilsperso.preprocess_text(tag,keep_all_words=keep_all_words,separate_sentences=False) #we need the stopwords for rake
 				output[current_main_title]+=text
 	return output
 
@@ -364,17 +380,23 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 				a="".join(l[0:-1])
 				comunities[a]=l[-1]
 
-	if option_used_text not in ("fulltext", "abstract","main_sections"):
-		raise ValueError
+	if option_used_text not in ("fulltext", "abstract","main_sections","aman_output"):
+		raise ValueError("Wrong value for argument option_used_text of function print_csv_for_gephi()")
 	
 	if option_separate_paper_parts:
 		option_used_text="fulltext"
+	
+
 
 	authors_id_dict={} #dict["name of author"]=id of author
 	keywords_id_dict={} #dict["text of keyword"]=id of keyword
 			#the text of the author/keyword in key is used to detect duplicates
 	nodes=[] #the info to output in the csv for nodes
-	nodes.append(["id","label","type","fulltext_link","abstract","community"])
+	if option_used_text == "aman_output":
+		nodes.append(["id","label","type","fulltext_link","community","abstract","introduction","methods","conclusion"])
+	else:
+		nodes.append(["id","label","type","fulltext_link","abstract","community"])
+	nb_columns=len(nodes[0])
 	previous_id=-1 #a different id for each node. articles, titles, keywords, etc, all share the same id numerotation
 	edges=[] #the info to output in the csv for edges
 	edges.append(["source","target","type","weight"])
@@ -394,16 +416,27 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 
 					#create article base node
 					article_title=soup.find("titleStmt").getText()
+					if len(article_title)<3:
+						a=fname[:-8].lower()
+						a=a.replace(" ","")
+						article_title=tmp_missing_titles[a]
 					previous_id+=1
 					article_id=previous_id
 					abstract=soup.abstract.getText() #to display to the user on the left column
 					url="elisebigeard.yo.fr/gephi_files/fulltexts/"+fname[:-7]+"html"
 					if option_communities:
-						comu=comunities[fname.replace(" ","")]
+						a=fname.replace(" ","")
+						if a in comunities:
+							comu=comunities[a]
+						else:
+							comu=""
 					else:
 						comu=""
 
-					nodes.append([article_id,article_title,"article",url,abstract,comu])
+					if option_used_text == "aman_output":
+						pass #we don't have yet all the data we need to create the node in this mode
+					else:
+						nodes.append([article_id,article_title,"article",url,abstract,comu])
 					#tmp_out_keywords[article_id]={}
 
 					#author nodes, attached to article node
@@ -418,7 +451,9 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 							previous_id+=1
 							authors_id_dict[author]=previous_id
 							author_id=previous_id
-							nodes.append([author_id,author,"author","","",""])
+							row=[author_id,author]
+							row += [''] * (nb_columns - len(row)) #pads empty columns
+							nodes.append(row)
 						else:
 							author_id=authors_id_dict[author]
 
@@ -450,7 +485,9 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 								previous_id+=1
 								keywords_id_dict[keyword]=previous_id
 								keyword_id=previous_id
-								nodes.append([keyword_id,keyword,"keyword","","",""])
+								row=[keyword_id,keyword,"keyword"]
+								row += [''] * (nb_columns - len(row)) #pads empty columns
+								nodes.append(row)
 							else:
 								keyword_id=keywords_id_dict[keyword]
 
@@ -471,8 +508,28 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 							text=utilsperso.preprocess_text(soup,keep_all_words=True)
 						elif option_used_text=="abstract":
 							text=utilsperso.preprocess_text(soup.abstract,keep_all_words=True)
+						elif option_used_text=="main_sections":
+							text=utilsperso.preprocess_text(soup.abstract,keep_all_words=True) #add abstract
+							sections=separate_sections_article(soup)
+							for section in sections:
+								if section in ["introduction","material and method","conclusion"]:
+									text+=sections[section]
+						elif option_used_text=="aman_output":
+							#we want to get the raw text of each section and add it to the node
+							sections=separate_sections_article(soup,keep_all_words=True)
+							for section in sections:
+								if section in ["introduction","material and method","conclusion"]:
+									text=sections[section]
+									text=" ".join([str(x) for x in text])
+									text=utilsperso.normalise_unicode(text,remove_non_ascii=True)
+									sections[section]=text
+							nodes.append([article_id,article_title,"article",url,comu,abstract,sections["introduction"],sections["material and method"],sections["conclusion"]])
+							text=utilsperso.preprocess_text(soup,keep_all_words=True) #to detect the keywords in the fulltext
+						else:
+							raise ValueError
 						sections={}
 						sections["fulltext"]=text
+
 
 						#text_text.append(text) #used for text similarity
 						#text_ids.append(article_id) #used for text similarity
@@ -490,7 +547,9 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 							previous_id+=1
 							section_node_id=previous_id
 							title=section_title+" : "+article_title[:10]+"..."
-							nodes.append([section_node_id,title,"article_section_"+section_title,"","",""])
+							row=[section_node_id,title,"article_section_"+section_title]
+							row += [''] * (nb_columns - len(row)) #pads empty columns
+							nodes.append(row)
 							edges.append([article_id,section_node_id,"undirected",1])
 
 						#detect mesh keywords
@@ -555,7 +614,9 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 								previous_id+=1
 								keywords_id_dict[keyword_propre]=previous_id
 								keyword_id=previous_id
-								nodes.append([keyword_id,keyword_propre,"keyword","","",""])
+								row=[keyword_id,keyword_propre,"keyword"]
+								row += [''] * (nb_columns - len(row)) #pads empty columns
+								nodes.append(row)
 							else:
 								keyword_id=keywords_id_dict[keyword_propre]
 
@@ -579,7 +640,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 
 		#recursively adds all levels of hyperonyms (more generic, upper-level terms)^
 		# variables nodes, edges and keywords_id_dict are globally changed inside the function to add data.
-		previous_id=recursive_add_hyperonyms_mesh(label1,previous_id)
+		previous_id=recursive_add_hyperonyms_mesh(label1,previous_id,nb_columns)
 
 		#old version, fetches only one level higher
 		if False:
@@ -591,7 +652,9 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 					if label2 not in keywords_id_dict:
 						previous_id+=1
 						keywords_id_dict[label2]=previous_id
-						nodes.append([previous_id,label2,"keyword","","",""])
+						row=[previous_id,label2,"keyword"]
+						row += [''] * (nb_columns - len(row)) #pads empty columns
+						nodes.append(row)
 				if label2 in keywords_id_dict:
 					id_2=keywords_id_dict[label2]
 					edges.append([id_1,id_2,"directed",1])
@@ -605,7 +668,9 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 				if label2 not in keywords_id_dict:
 					previous_id+=1
 					keywords_id_dict[label2]=previous_id
-					nodes.append([previous_id,label2,"keyword","","",""])
+					row=[previous_id,label2,"keyword"]
+					row += [''] * (nb_columns - len(row)) #pads empty columns
+					nodes.append(row)
 			if label2 in keywords_id_dict:
 				id_2=keywords_id_dict[label2]
 				edges.append([id_2,id_1,"directed",1]) #reverse direction
@@ -710,10 +775,10 @@ def stats_keywords(dict_keywords):
 	plt.show()
 
 if __name__=="__main__":
-	directory="fulltext_tei/august_batch" #change this as needed
+	directory="fulltext_tei/all" #change this as needed
 
 	#test_keywords(directory)
-	print_csv_for_gephi(directory,"fulltext",option_separate_paper_parts=False,option_prune_keywords=True,option_fname_out="august_commu",option_communities=False)
+	print_csv_for_gephi(directory,"aman_output",option_separate_paper_parts=False,option_prune_keywords=True,option_fname_out="august",option_communities=True)
 	#stats_keywords(tmp_keywords)
 
 

@@ -183,8 +183,26 @@ def separate_sections_article(soup,keep_all_words=True):
 				output[current_main_title]+=text
 	return output
 
+def extract_acm(folder="aman git/acm"):
+	"""main function if the corpus is acm"""
+	pass
+
+def idf_acm():
+	"""use this once at the start to generate the idf for this particular corpus"""
+
+	documents=[]
+
+	with open("aman git/acm/id_abstract",mode="r",encoding="utf-8") as f:
+		for l in f:
+			l=re.sub("^\n+ '","",l) #removes the numerical id at the start of each line + opening '
+			l=l[:-1] #removes ending ' at the end of the line
+			l=l.strip()
+
+	utils_perso.edit_idf(documents,filetype="raw_text",idf_file="acm_idf.pickle")
+	return
 
 def extract_canceropole(root_directory):
+	"""main function if the corpus is canceropole"""
 
 	id_article=-1
 	authors_id_dict={}

@@ -15,7 +15,7 @@ MAIN : PDF of articles collected by canceropole -> grobit -> TEI XML files -> [g
 
 For the html files displaying the content of the articles, input the TEI XML files into [generate_html_article_pages.py](generate_html_article_pages.py)
 
-
+<pre>
  +--------------------+
  |                    |
  |   PDF articles     |
@@ -81,6 +81,8 @@ For the html files displaying the content of the articles, input the TEI XML fil
 | [this javascript website](https://github.com/raphv/gexf-js) |
 | with small changes      |
 +-------------------------+
+
+</pre>
 
 ## Main scripts and useful stuff
 

@@ -77,10 +77,11 @@ For the html files displaying the content of the articles, input the TEI XML fil
     |GEXF XML file|
     +------+------+
            |
-+----------v--------------+
-| [this javascript website](https://github.com/raphv/gexf-js) |
-| with small changes      |
-+-------------------------+
++----------v-----------------------+
+| this javascript website          |
+|https://github.com/raphv/gexf-js  |
+| with small changes               |
++----------------------------------+
 
 </pre>
 

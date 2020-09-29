@@ -14,6 +14,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import utilsperso
 import spacy
+import bibtexparser #https://github.com/sciunto-org/python-bibtexparser
 #nlp=spacy.load("en_core_web_sm")
 
 #idf=utilsperso.finish_idf("27_07_tei_idf.pickle") #put here the .pickle file containing an idf
@@ -151,16 +152,18 @@ def copy_index_aman(titles_list=list_titles(),aman_dat_file="aman git/acm/id_tit
 			if title not in titles_list:
 				print(title)
 
-def separate_sections_article(soup,keep_all_words=True):
-	"""used to separate an article into several nodes, each node being a part of the article (introduction, methods, etc)"""
+def separate_sections_article_canceropole(soup,keep_all_words=True):
+	"""used to separate an article into several nodes, each node being a part of the article (introduction, methods, etc)
+	returns a dict["name of section"]="text of section" 
+	"other", "trash" etc is cleaned up inside this function. only real, major sections are returned"""
 
 	current_main_title="trash"
 	title_clean="trash"
 	output=defaultdict(list) #key=main section title. value=list of sentences
-	output["abstract"]=utilsperso.preprocess_text(soup.abstract,keep_all_words=keep_all_words,separate_sentences=False)
-	output["introduction"]=[""] #initalised to prevent a bug downstream if those sections don't exist
-	output["material and method"]=[""]
-	output["conclusion"]=[""]
+	output["abstract"]=utilsperso.preprocess_text(soup.abstract,keep_all_words=keep_all_words,separate_sentences=False,return_lemmas=True)
+	#output["introduction"]=[""] #initalised to prevent a bug downstream if those sections don't exist
+	#output["material and method"]=[""]
+	#output["conclusion"]=[""]
 	soup.abstract.decompose()
 	for tag in soup.find_all(["head","p"]): #iterate through head and p tags in the same order they come through the file. head=section title. p=content of the section. So we read the title of a section, followed by its content
 		if tag.name=="head":
@@ -183,23 +186,253 @@ def separate_sections_article(soup,keep_all_words=True):
 				output[current_main_title]+=text
 	return output
 
+def separate_sections_article_acl(fulltext):
+	"""argument must be the text with linebreaks in it"""
+	
+	current_main_title="trash"
+	title_clean="trash"
+	output=defaultdict(list) #key=main section title. value=list of sentences
+
+	sections={}
+	current_title="trash"
+	for line in fulltext:
+		current_section=[]
+		is_title=False
+		line2=utilsperso.process_section_title(line,restricted_allowed_titles=True)
+		if line2==False: #stuff like "author contribution", we want to remove it from the fulltext
+			current_title="trash"
+			continue
+		elif line2=="other": #probably not a section title, an ordinary line
+			current_section.append(line)
+		else: #good section title
+			sections[current_title]=" ".join(current_section)
+
+
 def extract_acm(folder="aman git/acm"):
 	"""main function if the corpus is acm"""
-	pass
+	idf=utilsperso.finish_idf("acm_idf.pickle") #make it with idf_acm()
+	word_matrix=idf.keys()
+
+
+	with open("aman_output/acm/id_words.dat",mode="w",encoding="utf-8") as f:
+		for i,word in enumerate(word_matrix):
+			f.write(str(i)+" "+word+"\n")
+
+	try :
+		with open("aman git/acm/id_abstract.dat",mode="r",encoding="utf-8") as f,\
+		open("aman_output/acm/id_abstract_tfidf_score.dat",mode="w",encoding="utf-8") as f_idf_score,\
+		open("aman_output/acm/id_abstract_tfidf_binary.dat",mode="w",encoding="utf-8") as f_idf_binary:
+			for l in f:
+				id_=re.match("^\d+ ",l).group(0)[:-1]
+				sys.stderr.write("processing "+id_+" ("+str(int(int(id_)/12498.0))+"%)\n")
+				l=re.sub("^\d+ '","",l) #removes the numerical id at the start of each line + opening '
+				l=l[:-1] #removes ending ' at the end of the line
+				l=l.strip()
+
+				#preprocessing
+				text=utilsperso.preprocess_text(l,return_lemmas=True)
+				tf=utilsperso.count_text_tfidf(" ".join(text),idf)
+
+				#tf-idf score
+				score_matrix=[id_]
+				binary_matrix=[id_]
+				for word in word_matrix:
+					if word in text:
+						score=str(tf[word])
+						score_matrix.append(score)
+						binary_matrix.append("1")
+					else:
+						score_matrix.append("0")
+						binary_matrix.append("0")
+
+				f_idf_score.write(" ".join(score_matrix)+"\n")
+				f_idf_binary.write(" ".join(binary_matrix)+"\n")
+	except KeyboardInterrupt:
+		pass #manually break loop
+	return
+
 
 def idf_acm():
 	"""use this once at the start to generate the idf for this particular corpus"""
 
 	documents=[]
 
-	with open("aman git/acm/id_abstract",mode="r",encoding="utf-8") as f:
-		for l in f:
-			l=re.sub("^\n+ '","",l) #removes the numerical id at the start of each line + opening '
-			l=l[:-1] #removes ending ' at the end of the line
-			l=l.strip()
+	try:
+		with open("aman git/acm/id_abstract.dat",mode="r",encoding="utf-8") as f:
+			for l in f:
+				l=re.sub("^\n+ '","",l) #removes the numerical id at the start of each line + opening '
+				l=l[:-1] #removes ending ' at the end of the line
+				l=l.strip()
 
-	utils_perso.edit_idf(documents,filetype="raw_text",idf_file="acm_idf.pickle")
+				#preprocessing
+				text=utilsperso.preprocess_text(l)
+				text2=[]
+				for token in text:
+					if token.pos_=="NUM":
+						text2.append("NUM")
+					else:
+						text2.append(token.lemma_)
+				text=" ".join(text2)
+				documents.append(text)
+	except KeyboardInterrupt:
+		pass
+
+	utilsperso.edit_idf(documents,filetype="raw_text",idf_file="acm_idf.pickle")
 	return
+
+
+def extract_acl_anthology(root_directory,output_directory):
+	"""main function if the corpus is acl anthology"""
+
+
+	#list the articles present in the cleaned full text folder. this allows to prune the .bib later and keep less things in memory
+	article_ids=set([])
+	for fname in os.listdir(root_directory+"/cleaned_acl_arc"):
+		fname=fname[:-4] #drop .txt
+		fname=fname.upper()
+		article_ids.add(fname)
+	
+
+	#parse the bibtex
+	#bibtex_file=root_directory+"/anthology+abstracts.bib"
+	bibtex_file=root_directory+"/anthology_small.bib"
+	sys.stderr.write("loading bib, this may take a while...\n")
+	with open(bibtex_file) as bibtex_f:
+		parser = bibtexparser.bparser.BibTexParser(common_strings=True)
+		parser.customization = bibtexparser.customization.convert_to_unicode
+		bib_database = bibtexparser.load(bibtex_f, parser=parser)
+	
+	sys.stderr.write("bib loaded !\n")
+	
+
+	#collect the bib for each article that we have the fulltext of
+	bib={}
+	i=0
+	for entry in bib_database.entries:
+		if "url" in entry.keys():
+			url=entry["url"]
+			id_=url.split("/")[-1].upper()
+			if id_ in article_ids:
+				bib[id_]=entry
+
+
+	#TODO fix cut words
+
+	#calculate idf
+	#run this only once the first time
+	if False:
+		documents={}
+		for i,id_ in enumerate(bib):
+			entry_bib=bib[id_]
+			with open(root_directory+"/cleaned_acl_arc/"+id_+".txt",mode="r",encoding="iso-8859-1") as f:
+				text=f.readlines()
+				text=" ".join(text)
+
+				#preprocess text
+				text=utilsperso.preprocess_text(text,return_lemmas=True)
+				text=" ".join(text)
+				documents[id_]=text
+
+				if len(documents)%500==0:
+					sys.stderr.write("Sending a batch of idf to process\n")
+					#utilsperso.edit_idf(documents,filetype="acl",idf_file="acl_anthology_september.pickle")
+					documents={}
+					progress=float(i)/len(documents)
+					sys.stderr.write(str(progress)+" % completed !\n")
+	
+
+		sys.stderr.write("Sending last batch of idf to process\n")
+		#utilsperso.edit_idf(documents,filetype="acl",idf_file="acl_anthology_september.pickle")
+		documents={}
+
+	#load word matrix + idf
+	idf=utilsperso.finish_idf("acl_anthology_september.pickle",prune_threshold=5)
+	word_matrix=idf.keys()
+
+	#retrieve the full text for each article and process stuff
+	id_authors={}
+	keys=set([])
+	#all output files are written line by line, article by article. so they have to be open at all times.
+	with open(output_directory+"/id_title.dat",mode="w",encoding="utf-8") as ftitle, \
+	open(output_directory+"/id_title_score.dat",mode="w",encoding="utf-8") as ftitlescore, \
+	open(output_directory+"/id_title_binary.dat",mode="w",encoding="utf-8") as ftitlebinary, \
+	open(output_directory+"/id_author.dat",mode="w",encoding="utf-8") as fauthor, \
+	open(output_directory+"/id_fulltext_score.dat",mode="w",encoding="utf-8") as ffullscore :
+		for id_ in bib: #loop over articles
+
+
+			#get info from the bib (author, title, etc)
+
+			entry_bib=bib[id_]
+			sys.stderr.write("processing article"+str(id_)+"\n")
+
+			#authors
+			authors=entry_bib["author"]
+			authors=authors.split("and\n")
+			authors2=[id_] #adding it here assures that a paper without authors will not result in a skipped line
+			for author in authors:
+				author=author.strip()
+				#TODO more preprocessing
+				if author in id_authors:
+					id_author=id_authors[author]
+				else:
+					try:
+						id_author=max(id_authors.keys())+1
+					except ValueError:
+						id_author=0
+					id_authors[id_author]=author
+				authors2.append(str(id_author))
+			fauthor.write((" ".join(authors2))+"\n")
+
+			#title
+			title=entry_bib["title"]
+			ftitle.write(str(id_)+" "+title+"\n")
+			title=utilsperso.preprocess_text(title,return_lemmas=True)
+			title_matrix=utilsperso.make_word_matrix(title,word_matrix,scores=idf,output_strings=True) #doesn't make sense to compute the tf-idf of a title, score is just the idf
+			title_matrix2=" ".join(title_matrix)
+			ftitlescore.write(str(id_)+" "+title_matrix2+"\n")
+			title_matrix=["0" if x=="0" else "1" for x in title_matrix ]
+			title_matrix=" ".join(title_matrix)
+			ftitlebinary.write(str(id_)+" "+title_matrix+"\n")
+
+
+			#the abstract can be either in the bib or in the full text
+			abstract=False
+			if "abstract" in entry_bib:
+				abstract=entry_bib["abstract"]
+
+
+			#get info from the full text (word matrices for each section)
+
+			with open(root_directory+"/cleaned_acl_arc/"+id_+".txt",mode="r",encoding="iso-8859-1") as ffulltext :
+
+
+				#get full text
+				with open(root_directory+"/cleaned_acl_arc/"+id_+".txt",mode="r",encoding="iso-8859-1") as f:
+					text=f.readlines()
+					text="\n".join(text)
+					
+					if text.lower().split(" ",1) in ["abstract","abstract.","summary","summary."]:
+						abstract=True
+
+
+					#preprocess text
+					text=utilsperso.preprocess_text(text,return_lemmas=True)
+					tf=utilsperso.count_text_tfidf(" ".join(text),idf)
+					current_word_matrix=utilsperso.make_word_matrix(text,word_matrix,tf,True)
+					ffullscore.write((" ".join(current_word_matrix))+"\n")
+					#TODO add binary output
+
+
+	with open(output_directory+"/id_authorname.dat",mode="w",encoding="utf-8") as fauthorname :
+		for id_ in id_authors:
+			fauthorname.write(str(id_)+" "+id_authors[id_]+"\n")
+
+	with open(output_directory+"/id_words.dat",mode="w",encoding="utf-8") as fwords :
+		for word in word_matrix:
+			fwords.write(word+"\n")
+
+
 
 def extract_canceropole(root_directory):
 	"""main function if the corpus is canceropole"""
@@ -208,16 +441,13 @@ def extract_canceropole(root_directory):
 	authors_id_dict={}
 	author_edges=[] #list of lists [id_article, id_author, id_author, id_author]
 	titles={}
-	option_used_text="abstract"
-	abstracts_matrix=[]
-	fulltexts_matrix=[]
-	mainsections_matrix=[]
+	sections_matrices=[] #list of articles. each list element is a list, a word matrix for that article. a word matrix is a list of scores where the index gives what word is concerned, and the value gives the score for that word.
 	abstracts_raw=[]
 
 	idf=utilsperso.finish_idf("27_07_tei_idf.pickle") #put here the .pickle file containing an idf
-	word_matrix=idf.keys()
+	word_matrix=idf.keys() #this list gives the indices for words in the word matrices
 
-	tmp_missing_titles={}
+	tmp_missing_titles={} #for some annoying papers in this corpus that don't process properly
 	with open("missing_titles.txt",mode="r",encoding="utf-8") as f:
 		for l in f:
 			l=l.strip()
@@ -246,6 +476,7 @@ def extract_canceropole(root_directory):
 					titles[id_article]=article_title
 					abstract=soup.abstract.getText()
 					abstract=abstract.strip()
+					abstract=re.sub("\n"," ",abstract)
 					abstracts_raw.append(abstract)
 
 
@@ -275,38 +506,27 @@ def extract_canceropole(root_directory):
 
 					#process the text
 
-					for text_mode in ["abstract","fulltext","main_sections"]:
+					text=utilsperso.preprocess_text(soup.abstract,keep_all_words=False,return_lemmas=True) #add abstract
+					sections=separate_sections_article_canceropole(soup)
+					sections["fulltext"]=utilsperso.preprocess_text(soup,keep_all_words=False,return_lemmas=True)
 
-						#select which parts of the article we want to take into account
-						if text_mode =="fulltext":
-							# all, including the abstract
-							#soup.abstract.decompose() #removes the abstract from the text
-							text=utilsperso.preprocess_text(soup,keep_all_words=False)
-						elif text_mode=="abstract":
-							text=utilsperso.preprocess_text(soup.abstract,keep_all_words=False)
-							abstract_raw=utilsperso.preprocess_text(soup.abstract,keep_all_words=True)
-						elif text_mode=="main_sections":
-							#abstract + intro + material and methods + conclusion
-							text=utilsperso.preprocess_text(soup.abstract,keep_all_words=False) #add abstract
-							sections=separate_sections_article(soup)
-							for section in sections:
-								if section in ["introduction","material and method","conclusion"]:
-									text+=sections[section]
-						else:
-							raise ValueError
+					current_paper_matrices={}
+					for section in sections: #section = abstract, fulltext, intro, methods...
 
+						text=sections[section]
 
-						try:
-							text=[x.lemma_ for x in text]
-						except AttributeError: #spacy being annoying
-							text2=[]
-							for token in text:
-								try:
-									token=token.lemma_
-								except AttributeError:
-									token=token
-								text2.append(token)
-							text=text2
+						if True: #should not be needed anymore
+							try:
+								text=[x.lemma_ for x in text]
+							except AttributeError: #spacy being annoying
+								text2=[]
+								for token in text:
+									try:
+										token=token.lemma_
+									except AttributeError:
+										token=token
+									text2.append(token)
+								text=text2
 
 
 						#convert mesh terms
@@ -320,58 +540,20 @@ def extract_canceropole(root_directory):
 
 						#get score
 						tf=utilsperso.count_text_tfidf(" ".join(text),idf)
-						article_matrix=[id_article]
+
+						#save matrix
+						current_word_matrix=[]
 						for word in word_matrix:
 							if word in text:
 								score=tf[word]
 							else:
 								score=0
-							article_matrix.append(score)
-
-						if text_mode=="abstract":
-							abstracts_matrix.append(article_matrix)
-						elif text_mode=="fulltext":
-							fulltexts_matrix.append(article_matrix)
-						elif text_mode=="main_sections":
-							mainsections_matrix.append(article_matrix)
-
-
-						continue
+							current_word_matrix.append(score)
+						current_paper_matrices[section]=current_word_matrix
+					sections_matrices.append(current_paper_matrices)
 
 
 
-						#add the keywords we found to the nodes/edges
-						for keyword in keywords_found:
-							
-
-							#get the printable/clean version of the keyword
-							keyword_propre=keyword
-							if keyword in mesh_synonyms:
-								#print("mesh synonym detected",keyword,mesh_synonyms[keyword])
-								keyword_propre=mesh_synonyms[keyword]
-
-							if keyword_propre in keyword_exclude: #this keyword is garbage, ignore it
-								continue
-
-							#add node if doesn't exist
-							if keyword_propre not in keywords_id_dict:
-								previous_id+=1
-								keywords_id_dict[keyword_propre]=previous_id
-								keyword_id=previous_id
-								row=[keyword_id,keyword_propre,"keyword"]
-								row += [''] * (nb_columns - len(row)) #pads empty columns
-								nodes.append(row)
-							else:
-								keyword_id=keywords_id_dict[keyword_propre]
-
-							#add edge
-							weight=keywords_found[keyword]
-							if option_separate_paper_parts:
-								#connect to the paper section node
-								edges.append([section_node_id,keyword_id,"undirected",weight])
-							else:
-								#connect the the whole paper node
-								edges.append([article_id,keyword_id,"undirected",weight])
 
 
 	except KeyboardInterrupt:
@@ -399,6 +581,13 @@ def extract_canceropole(root_directory):
 		for article in abstracts_raw:
 			f.write(article+"\n")
 
+	#list_possible_sections=set([])
+	#for article in sections_matrices:
+	#	for section in sections_matrices[article]:
+	#		if section not in list_possible_sections:
+	#			list_possible_sections.add(section)
+	#print("lama",list_possible_sections)
+	#exit() #HERE, trying to print everything to the correct file. below is old version.
 	for variable,fname in ([abstracts_matrix,"abstract"],[fulltexts_matrix,"fulltext"],[mainsections_matrix,"mainsections"]):
 
 		with open("aman_output/id_"+fname+"_score.dat",mode="w",encoding="utf-8") as f:
@@ -413,9 +602,58 @@ def extract_canceropole(root_directory):
 				article=[str(x) for x in article]
 				f.write(" ".join(article)+"\n")
 
+def count_sections(source):
+	"""counts the section titles in one whole corpus and outputs stats
+	source : acl or canceropole"""
 
+	if source not in ["canceropole","acl"]:
+		raise ValueError
+	
+	if source=="canceropole":
+		folder="fulltext_tei/all"
+		encoding='utf-8'
+	else:
+		folder="/home/sam/work/corpora/acl/cleaned_acl_arc"
+		encoding="iso-8859-1"
+	i_articles=0
+	titles=defaultdict(int)
+	try :
+		for path, dirs, files in os.walk(folder):
+			for fname in files:
+				with open(path+"/"+fname,mode="r",encoding=encoding) as f:
+					i_articles+=1
+
+					if source=="acl":
+						for l in f:
+							m=re.match("^\d+[\. ]",l)
+							if m:
+								l=re.sub("[\d \.]","",l)
+								l=utilsperso._clean_section_title(l)
+								if l:
+									if len(l)>0:
+										titles[l]+=1
+
+					else:
+						lines="".join(f.readlines())
+						soup=BeautifulSoup(lines,"xml")
+						a=soup.find_all("head")
+						for title in a:
+							title=utilsperso._clean_section_title(title.getText())
+							if title:
+								if len(title)>0:
+									titles[title]+=1
+
+				if i_articles%10==0:
+					pass
+					#print(str(i_articles)+" traites. "+str(len(titles.keys()))+" titres trouvés")
+	except KeyboardInterrupt:
+		pass
+
+	for key in sorted(titles, key=titles.get, reverse=True):
+		print(key+"\t"+str((titles[key])/float(i_articles)*100)[:2]+"%")
 
 if __name__=="__main__":
 	#extract_canceropole("fulltext_tei/all")
-	extract_acm("aman_git/acm")
+	#extract_acl_anthology("/home/sam/work/corpora/acl","aman_output/acl")
+	extract_acm("aman git/acm")
 	

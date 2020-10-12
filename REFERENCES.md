@@ -12,6 +12,8 @@ Datasets mostly used : ACL anthology and DBLP. Mimic is used to train medical wo
 
 **Overall suggestion** : Use methods from citation recommendation to make fine-grained paper sections embeddings. Use BioWordVec to include MESH into the word embeddings, also some kind of attention mechanism.
 
+(from aman but keeping here to not forget about it https://arxiv.org/abs/1907.00962 detect parts of the abstract that contain a claim. manually annotated dataset available)
+
 ### Closest to our work
 
 * GOOD [BioWordVec, improving biomedical word embeddings with subword information and MeSH](https://www.nature.com/articles/s41597-019-0055-0.pdf) **word embedding, terminologies, resource, not about graphs** 2019.

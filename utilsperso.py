@@ -363,9 +363,16 @@ def preprocess_text(input_text,keep_all_words=False,separate_sentences=False,ret
 		text=input_text.getText(separator=" ") #if the input is a soup
 	except AttributeError:
 		text=input_text
-	text=re.sub("\. ?\. ",". ",text) #removes a soup artifact ". .. . ... . "etc replaced by ". ". Also replaces "..." by ". " spacy is going to treat those as empty sentences and it's annoying
-	text=re.sub("et al \.","et al ",text) #same, spacy is annoying with dots
-	text=re.sub(" +"," ",text) #removes multiple spaces
+	
+	if len(text)<1:
+		return [""]
+
+	try:
+		text=re.sub("\. ?\. ",". ",text) #removes a soup artifact ". .. . ... . "etc replaced by ". ". Also replaces "..." by ". " spacy is going to treat those as empty sentences and it's annoying
+		text=re.sub("et al \.","et al ",text) #same, spacy is annoying with dots
+		text=re.sub(" +"," ",text) #removes multiple spaces
+	except TypeError: #one of those steps reduced the input to an empty string
+		return [""]
 
 	spacy_text=nlp(text)
 	sentences=[]
@@ -452,6 +459,7 @@ def output_multi_corpus():
 	use_canceropole=True
 	use_acm=True
 	use_acl=True
+	use_text8=True #this is going to take a while é_è
 	keep_all_words=False
 	documents=[]
 
@@ -501,6 +509,41 @@ def output_multi_corpus():
 					text=preprocess_text(l,keep_all_words=keep_all_words,return_lemmas=True)
 					text=" ".join(text)
 					documents.append(text)
+		except KeyboardInterrupt:
+			pass #manually break loop
+	
+
+	if use_text8:
+		try:
+			fname="/home/sam/work/glove/GloVe/text8"
+			i=0
+			with open(fname,mode="r",encoding="utf-8") as f:
+				for l in f:
+					l=l.split(" ")
+					chunk=[]
+					for word in l:
+						chunk.append(word)
+						if len(chunk)>1000:
+							try:
+								i+=1
+								print("processing chunk "+str(i))
+								chunk=" ".join(chunk)
+								text=preprocess_text(chunk,keep_all_words=keep_all_words,return_lemmas=True)
+								text=" ".join(text)
+								documents.append(text)
+								chunk=[]
+							except Exception:
+								chunk=[]
+
+
+					try:
+						text=preprocess_text(chunk,keep_all_words=keep_all_words,return_lemmas=True)
+						text=" ".join(text)
+						documents.append(text)
+					except Exception:
+						pass
+			print("done")
+
 		except KeyboardInterrupt:
 			pass #manually break loop
 

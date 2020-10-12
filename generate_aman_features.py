@@ -207,49 +207,321 @@ def separate_sections_article_acl(fulltext):
 		else: #good section title
 			sections[current_title]=" ".join(current_section)
 
+import torch
+from pytorch_pretrained_bert import BertTokenizer, BertConfig
+import matplotlib.pyplot as plt
+import transformers
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+from tensorflow.keras import models, layers, preprocessing as kprocessing
+from tensorflow.keras import backend as K
 
-def extract_acm(folder="aman git/acm"):
+def bert_test():
+
+	text=[]
+	masks=[]
+	words_per_entry=150
+
+
+	#get conf info to predict
+	conf={}
+	with open("/home/sam/work/corpora/acm/id_conf.dat",mode="r",encoding="utf-8") as f:
+		for l in f:
+			l=l.strip()
+			l=l.split(" ")
+			conf[l[0]]=l[1]
+	y_train=[]
+
+	try:
+		with open("aman git/acm/id_title.dat",mode="r",encoding="utf-8") as f:
+			for l in f:
+				id_,title=l.split("\t") #title
+				if False: #abstract
+					id_,title=l.split(" ",1)
+					l=re.sub("^\d+ '","",l) #removes the numerical id at the start of each line + opening '
+					l=l[:-1] #removes ending ' at the end of the line
+					l=l.strip()
+					title=l
+
+
+				sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
+				if int(id_)/12498.0*100>10: #break at 10%, to avoid manually breaking possibly in the middle of the loop. remove for "real" run
+					break
+				if len(title)>1:
+					title=re.split("[.?!]",title)
+					for sent in title:
+						sent="[CLS] "+sent+" [SEP]" #sentence sep
+						sent=tokenizer.tokenize(sent) #tokenise
+
+						if len(sent)>words_per_entry: #truncate if too many words
+							sent=sent[:words_per_entry-1] #-1 to make room for [SEP]
+							sent.append("[SEP]")
+						text.append(sent)
+
+						mask=[]
+						for word in sent:
+							mask.append(1)
+						while len(mask)<words_per_entry:
+							mask.append(0)
+						masks.append(mask)
+
+						#predict conf
+						y_train.append(conf[id_])
+
+
+
+	except KeyboardInterrupt:
+		pass
+
+
+	#masks = [[1]*len(sent) + [0]*(words_per_entry - len(sent)) for sent in text] #masks
+	#pad if too short. probably necessary to pad after making the masks
+	text2=[]
+	for sent in text:
+		while len(sent)<words_per_entry:
+			sent.append("[PAD]")
+		text2.append(sent)
+	sys.stderr.write("padding done\n")
+
+	try:
+		idx = [tokenizer.convert_tokens_to_ids(x) for x in text2]
+	except KeyError:
+		raise KeyError("Out of vocabulary word. Something went wrong in preprocessing.")
+	sys.stderr.write("converted words into id\n")
+
+
+
+	segments = [] 
+	for seq in text2:
+		temp=[]
+		i=0
+		for token in seq:
+			temp.append(i)
+			if token == "[SEP]":
+				i += 1
+		segments.append(temp)
+	
+	print(len(idx))
+	print(len(masks))
+	print(len(segments))
+
+	sys.stderr.write("Xtrain starting\n")
+	x_train = [np.asarray(idx, dtype='int32'), 
+		np.asarray(masks, dtype='int32'), 
+		np.asarray(segments, dtype='int32')]
+	sys.stderr.write("Xtrain finished\n")
+
+	#with open("bert.pickle",mode="wb") as f:
+	#	pickle.dump(x_train,f)
+	
+	#print(text2[0])
+	#print(idx[0])
+	#print(segments[0])
+	#print()
+	#print(x_train[0][0])
+	#print(x_train[1][0])
+	#print(x_train[2][0])
+
+
+	## inputs
+	idx = layers.Input((50), dtype="int32", name="input_idx")
+	masks = layers.Input((50), dtype="int32", name="input_masks")
+	sys.stderr.write("inputs done\n")
+
+	## pre-trained bert with config
+	config = transformers.DistilBertConfig(dropout=0.2, attention_dropout=0.2)
+	sys.stderr.write("config done\n")
+	print()
+	config.output_hidden_states = False
+	nlp = transformers.TFDistilBertModel.from_pretrained('distilbert-base-uncased', config=config)
+	print()
+	sys.stderr.write("bert loaded\n")
+	print()
+	#help(nlp)
+	#bert_out = nlp([x_train[0], x_train[1]])[0]
+	bert_out = nlp(idx, attention_mask=masks)[0]
+	sys.stderr.write("bert trained\n")
+
+
+
+	## fine-tuning
+	x = layers.GlobalAveragePooling1D()(bert_out)
+	x = layers.Dense(64, activation="relu")(x)
+	y_out = layers.Dense(len(np.unique(conf)), activation='softmax')(x)
+	sys.stderr.write("fine tuning done\n")
+
+	## compile
+	model = models.Model([idx, masks])
+	for layer in model.layers[:3]:
+		layer.trainable = False
+	
+	model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+	#model.summary()
+
+	#train
+	## encode y
+	dic_y_mapping = {n:label for n,label in enumerate(np.unique(y_train))}
+	inverse_dic = {v:k for k,v in dic_y_mapping.items()}
+	y_train = np.array([inverse_dic[y] for y in y_train])
+	## train
+	#training = model.fit(x=x_train, y=y_train, batch_size=64, epochs=1, shuffle=True, verbose=1, validation_split=0.3)
+	training = model.fit(x=x_train, y=y_train)
+	## test
+	predicted_prob = model.predict(X_test)
+	predicted = [dic_y_mapping[np.argmax(pred)] for pred in predicted_prob]
+
+	
+
+def extract_acm():
 	"""main function if the corpus is acm"""
+
+	glove_dimensions=50
+	glove_max_word_len=150 #max number of words in an article. every article is padded/cut with 0s to match this length
+	glove_max_word_len=glove_max_word_len*glove_dimensions
+	out_folder="/home/sam/work/corpora/acm output"
+
+	#load word info
 	idf=utilsperso.finish_idf("acm_idf.pickle") #make it with idf_acm()
-	word_matrix=idf.keys()
+
+	#load word ids
+	words_id_title={}
+	with open("aman git/words_title.txt",mode="r",encoding="utf-8") as f:
+		for i,l in enumerate(f):
+			l=l.strip()
+			words_id_title[l]=int(i)
+	words_id_abstract={}
+	with open("aman git/words_abstract.txt",mode="r",encoding="utf-8") as f:
+		for i,l in enumerate(f):
+			l=l.strip()
+			words_id_abstract[l]=int(i)
+
+	glove_vectors={}
+	with open("/home/sam/work/corpora/acm output/acm/glovevectors.txt",mode="r",encoding="utf-8") as f:
+		for l in f:
+			l=l.strip()
+			entry=l.split(" ")
+			word=entry[0]
+			vector=entry[1:]
+			vector=[float(x) for x in vector]
+			glove_vectors[word]=vector
 
 
-	with open("aman_output/acm/id_words.dat",mode="w",encoding="utf-8") as f:
-		for i,word in enumerate(word_matrix):
-			f.write(str(i)+" "+word+"\n")
+	missing_title_id=[] #keep in memory which entries have a missing title, so we can skip them when working on the abstract
+
+	title_word_list=set([]) #need these 2 var on first pass only, to build the word list
+	abstract_word_list=set([])
 
 	try :
-		with open("aman git/acm/id_abstract.dat",mode="r",encoding="utf-8") as f,\
-		open("aman_output/acm/id_abstract_tfidf_score.dat",mode="w",encoding="utf-8") as f_idf_score,\
-		open("aman_output/acm/id_abstract_tfidf_binary.dat",mode="w",encoding="utf-8") as f_idf_binary:
-			for l in f:
-				id_=re.match("^\d+ ",l).group(0)[:-1]
-				sys.stderr.write("processing "+id_+" ("+str(int(int(id_)/12498.0))+"%)\n")
-				l=re.sub("^\d+ '","",l) #removes the numerical id at the start of each line + opening '
-				l=l[:-1] #removes ending ' at the end of the line
-				l=l.strip()
+		for text_type in ["title","abstract"]:
 
-				#preprocessing
-				text=utilsperso.preprocess_text(l,return_lemmas=True)
-				tf=utilsperso.count_text_tfidf(" ".join(text),idf)
+			sys.stderr.write("\n")
 
-				#tf-idf score
-				score_matrix=[id_]
-				binary_matrix=[id_]
-				for word in word_matrix:
-					if word in text:
-						score=str(tf[word])
-						score_matrix.append(score)
-						binary_matrix.append("1")
-					else:
-						score_matrix.append("0")
-						binary_matrix.append("0")
+			with open("/home/sam/work/corpora/acm/id_"+text_type+".dat",mode="r",encoding="utf-8") as f,\
+			open(out_folder+"/id_"+text_type+"_tfidf_score.dat",mode="w",encoding="utf-8") as f_idf,\
+			open(out_folder+"/id_"+text_type+"_binary.dat",mode="w",encoding="utf-8") as f_binary,\
+			open(out_folder+"/id_"+text_type+"_glove.dat",mode="w",encoding="utf-8") as f_glove:
+				for l in f:
+					
 
-				f_idf_score.write(" ".join(score_matrix)+"\n")
-				f_idf_binary.write(" ".join(binary_matrix)+"\n")
+					#clean up + preprocessing
+					if text_type=="title":
+						id_,title=l.split("\t")
+						sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
+						title=title.strip() #do this after split on \t, otherwise it removes the \t at the end of the line if the title is empty, which confuses the above code
+						if len(title)<1:
+							#empty title, remove this entry from the data
+							sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
+							missing_title_id.append(id_) #index by id_, not by line number, since we're ignoring some lines
+							continue
+
+						else:
+							nb_words=len(title.split(" "))
+							if nb_words>80:
+								#the title seems too long, we probably have the whole abstract. In that case, we only keep the first sentence
+								title=utilsperso.preprocess_text(title,return_lemmas=True,separate_sentences=True)
+								title=title[0]
+							else:
+								title=utilsperso.preprocess_text(title,return_lemmas=True,separate_sentences=False)
+							text=title
+
+					elif text_type=="abstract":
+						id_=l.split(" ",1)[0]
+						sys.stderr.write("processing abstract "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
+						if id_ in missing_title_id:
+							sys.stderr.write("\nignoring abstract "+id_+" because of empty title ("+str(int(int(id_)/12498.0*100))+"%)\n")
+							continue #missing title, remove this entry from data
+						l=re.sub("^\d+ '","",l) #removes the numerical id at the start of each line + opening '
+						l=l[:-1] #removes ending ' at the end of the line
+						l=l.strip()
+						text=l
+						if len(text)<1:
+							print("\n warning empty abstract",id_,"\n")
+						text=utilsperso.preprocess_text(text,return_lemmas=True)
+
+
+					#populates a list of all words found in the corpus. useful to prune vocabulary. run once on first pass.
+					if False:
+						for word in text:
+							if text_type=="title":
+								title_word_list.add(word)
+							else:
+								abstract_word_list.add(word)
+						continue
+
+
+
+					#binary + tf-idf
+					tf=utilsperso.count_text_tfidf(" ".join(text),idf)
+					output_binary=[str(id_)]
+					output_tfidf=[str(id_)]
+					for word in text:
+						try:
+							if text_type=="title":
+								word_id=words_id_title[word]
+							else:
+								word_id=words_id_abstract[word]
+						except KeyError:
+							sys.stderr.write("\nError : word '"+word+"' missing from vocabulary. Check that the text is lemmatised and that you have loaded the correct vocabulary file\n")
+							raise
+						output_binary.append(str(word_id))
+						score=tf[word]
+						output_tfidf.append(str(word_id)+"|"+str(score))
+					f_binary.write(" ".join(output_binary)+"\n")
+					f_idf.write(" ".join(output_tfidf)+"\n")
+
+
+
+					#glove
+					article_vector=[]
+					for word in text:
+						if len(article_vector)>glove_max_word_len:
+							break
+						try:
+							word_vector=glove_vectors[word]
+						except: #word is out of vocabulary
+							word_vector=[0.0]*glove_dimensions
+						article_vector+=word_vector
+					while len(article_vector)<glove_max_word_len:
+						article_vector.append(0.0)
+					article_vector.insert(0,id_)
+					article_vector=[str(x) for x in article_vector]
+					f_glove.write(" ".join(article_vector)+"\n")
 	except KeyboardInterrupt:
 		pass #manually break loop
-	return
+	except Exception: #just to avoid overwriting in the terminal the message showing on which line it broke
+		sys.stderr.write("\n")
+		raise
+	
+	sys.stderr.write("\n")
+		
+	if False: #only on first pass. makes a list of encountered words, so we can make a word index as small as possible
+		with open("words_title.txt",mode="w",encoding="utf-8") as f:
+			for word in title_word_list:
+				f.write(word+"\n")
+		with open("words_abstract.txt",mode="w",encoding="utf-8") as f:
+			for word in abstract_word_list:
+				f.write(word+"\n")
+		return
 
 
 def idf_acm():
@@ -655,5 +927,7 @@ def count_sections(source):
 if __name__=="__main__":
 	#extract_canceropole("fulltext_tei/all")
 	#extract_acl_anthology("/home/sam/work/corpora/acl","aman_output/acl")
-	extract_acm("aman git/acm")
+	extract_acm()
+	#bert_test()
+
 	

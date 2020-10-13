@@ -83,7 +83,8 @@ If you want to execute the code you can find the corpus [here](https://www.dropb
 
 ### For the paper, from several corpora (GSM, DBLP, ACL anthology) to .dat files
 
-will be added later
+generate_aman_features.extract_acm()
+glove : /home/sam/work/glove
 
 ## Main scripts and useful stuff
 

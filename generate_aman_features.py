@@ -375,15 +375,24 @@ def bert_test():
 def extract_acm():
 	"""main function if the corpus is acm"""
 
+	out_folder="/home/sam/work/corpora/acm output"
+
+	make_vocabulary=False #alter the behaviour of the whole script. Instead of the normal output, outputs vocabulary files (word lists). Must be done once before normal use, to generate "words_title.txt" and "words_abstract.txt"
+
+	only_keep_top_words=True #only keep the top N words per entry, according to tf-idf score
+	top_words_amount=20 #if only_keep_top_words=True, how many words per entry ?
+
 	glove_dimensions=50
 	glove_max_word_len=150 #max number of words in an article. every article is padded/cut with 0s to match this length
+	if only_keep_top_words:
+		glove_max_word_len=top_words_amount
 	glove_max_word_len=glove_max_word_len*glove_dimensions
-	out_folder="/home/sam/work/corpora/acm output"
 
 	#load word info
 	idf=utilsperso.finish_idf("acm_idf.pickle") #make it with idf_acm()
 
 	#load word ids
+	#generated with this same script, using option make_vocabulary
 	words_id_title={}
 	with open("aman git/words_title.txt",mode="r",encoding="utf-8") as f:
 		for i,l in enumerate(f):
@@ -407,7 +416,6 @@ def extract_acm():
 
 
 	missing_title_id=[] #keep in memory which entries have a missing title, so we can skip them when working on the abstract
-
 	title_word_list=set([]) #need these 2 var on first pass only, to build the word list
 	abstract_word_list=set([])
 
@@ -429,7 +437,7 @@ def extract_acm():
 						sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
 						title=title.strip() #do this after split on \t, otherwise it removes the \t at the end of the line if the title is empty, which confuses the above code
 						if len(title)<1:
-							#empty title, remove this entry from the data
+							#empty title, ignore this entry and keep the id to remember to also ignore this entry on the "abstract" pass
 							sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
 							missing_title_id.append(id_) #index by id_, not by line number, since we're ignoring some lines
 							continue
@@ -455,12 +463,13 @@ def extract_acm():
 						l=l.strip()
 						text=l
 						if len(text)<1:
-							print("\n warning empty abstract",id_,"\n")
+							print("\n warning empty abstract, this shouldn't append",id_,"\n")
+							raise ValueError
 						text=utilsperso.preprocess_text(text,return_lemmas=True)
 
 
 					#populates a list of all words found in the corpus. useful to prune vocabulary. run once on first pass.
-					if False:
+					if make_vocabulary:
 						for word in text:
 							if text_type=="title":
 								title_word_list.add(word)
@@ -469,12 +478,29 @@ def extract_acm():
 						continue
 
 
+					###binary + tf-idf
+					tf=utilsperso.count_text_tfidf(text,idf) #dictionnary[word]=tf-idf score of the word
+					tf_by_score={}
 
-					#binary + tf-idf
-					tf=utilsperso.count_text_tfidf(" ".join(text),idf)
+					#reverse tf dict
+					for word in tf:
+						score=tf[word]
+						tf_by_score[score]=word
+
+					#keep only words with best score
+					text2=[] #the text, but with only the words we want to keep. if only_keep_top_words=True, this is only the top N words by tf-idf. Otherwise, it's the same as variable 'text'
+					if only_keep_top_words:
+						#we order the words by score, and only add the words with the best score to text2
+						for score in sorted(tf_by_score)[:top_words_amount]:
+							word=tf_by_score[score]
+							text2.append(word)
+					else:
+						text2=text
+	
 					output_binary=[str(id_)]
 					output_tfidf=[str(id_)]
-					for word in text:
+					#translate the word into word_id and add to output
+					for word in text2:
 						try:
 							if text_type=="title":
 								word_id=words_id_title[word]
@@ -483,27 +509,30 @@ def extract_acm():
 						except KeyError:
 							sys.stderr.write("\nError : word '"+word+"' missing from vocabulary. Check that the text is lemmatised and that you have loaded the correct vocabulary file\n")
 							raise
-						output_binary.append(str(word_id))
+
 						score=tf[word]
+						output_binary.append(str(word_id))
 						output_tfidf.append(str(word_id)+"|"+str(score))
+
+					#finish output
 					f_binary.write(" ".join(output_binary)+"\n")
 					f_idf.write(" ".join(output_tfidf)+"\n")
 
 
-
-					#glove
+					###glove
 					article_vector=[]
-					for word in text:
-						if len(article_vector)>glove_max_word_len:
+					for word in text2:
+						if len(article_vector)>glove_max_word_len: #if the text is too long,stop when we have reached the max amount of words
+							#glove_max_word_len is already multiplied by the number of dimensions
 							break
 						try:
 							word_vector=glove_vectors[word]
 						except: #word is out of vocabulary
 							word_vector=[0.0]*glove_dimensions
 						article_vector+=word_vector
-					while len(article_vector)<glove_max_word_len:
+					while len(article_vector)<glove_max_word_len: #if the text is too short, pad with zeroes until we reach the max amount of words
 						article_vector.append(0.0)
-					article_vector.insert(0,id_)
+					article_vector.insert(0,id_) #add the ID at the beginning of the line. we do this at the end to not offset the number of words
 					article_vector=[str(x) for x in article_vector]
 					f_glove.write(" ".join(article_vector)+"\n")
 	except KeyboardInterrupt:
@@ -514,7 +543,7 @@ def extract_acm():
 	
 	sys.stderr.write("\n")
 		
-	if False: #only on first pass. makes a list of encountered words, so we can make a word index as small as possible
+	if make_vocabulary: #only on first pass. makes a list of encountered words, so we can make a word index as small as possible
 		with open("words_title.txt",mode="w",encoding="utf-8") as f:
 			for word in title_word_list:
 				f.write(word+"\n")

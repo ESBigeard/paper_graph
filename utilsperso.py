@@ -247,7 +247,7 @@ def edit_idf(documents_list,filetype="raw_text",idf_file="idf.pickle"):
 	return
 
 def count_text_tfidf(text,idf=False):
-	""" calculates the tf of a text, given an already computed idf
+	""" calculates the tf-idf of each word of a text, given an already computed idf
 	text argument : either a text or a list of words from a text already tokenised. words should be already preprocessed : lemmatised, stop-words filtered...
 	idf argument : a word frequency dictionnary. If not specified, will look for a idf.pickle file in the working directory. remember to pass your idf through finish_idf()
 	text_format : one string of text, or a list of words
@@ -267,7 +267,8 @@ def count_text_tfidf(text,idf=False):
 	tf=defaultdict(int)
 	tot_words=0
 	for word in text:
-		word=word.lower() #preprocessing should have been done outside of this function, but can't hurt to do something very basic just in case. just in case of uppercase. haha. sorry.
+		#word=word.lower() #preprocessing should have been done outside of this function, but can't hurt to do something very basic just in case. just in case of uppercase. haha. sorry.
+		#actually don't do that cause NUM is uppercase
 		if len(word)>1:
 			tf[word]+=1
 			tot_words+=1

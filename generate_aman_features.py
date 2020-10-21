@@ -207,15 +207,16 @@ def separate_sections_article_acl(fulltext):
 		else: #good section title
 			sections[current_title]=" ".join(current_section)
 
-import torch
-from pytorch_pretrained_bert import BertTokenizer, BertConfig
-import matplotlib.pyplot as plt
-import transformers
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
-from tensorflow.keras import models, layers, preprocessing as kprocessing
-from tensorflow.keras import backend as K
 
 def bert_test():
+
+	import torch
+	from pytorch_pretrained_bert import BertTokenizer, BertConfig
+	import matplotlib.pyplot as plt
+	import transformers
+	tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+	from tensorflow.keras import models, layers, preprocessing as kprocessing
+	from tensorflow.keras import backend as K
 
 	text=[]
 	masks=[]
@@ -370,28 +371,196 @@ def bert_test():
 	predicted_prob = model.predict(X_test)
 	predicted = [dic_y_mapping[np.argmax(pred)] for pred in predicted_prob]
 
+
+
+def correct_acm_entry():
+	""" main function if you want to correct the original input files. should not be needed anymore, but keep it if you need to check how it was done
+	reads original acm corpus files and output replacement files with some things corrected
+	 detects when the abstract was mistakenly put in the titles file, detects the title boundary, and removes the abstract
+	- removes title from abstract file
+	- entries without title+abstract removed, remaining entries are renumbered as to not leave spaces in the numbers
+	"""
+
+
+	max_words_title=10 #maximum number of words allowed in a title. used to cut titles that probably include an abstract. real titles rarely have more than 10 words. this counts words after stop words are removed.
+	id_update={}#saves the correspondence old id/new id, just in case
+
+	directory="/home/sam/work/corpora/acm/"
+
+	try :
+		with open(directory+"id_abstract_old.dat",mode="r",encoding="utf-8") as f,\
+		 open(directory+"id_abstract.dat",mode="w",encoding="utf-8") as fabst,\
+		 open(directory+"id_title.dat",mode="w",encoding="utf-8") as ftitle,\
+		 open(directory+"id_abstract_prep.dat",mode="w",encoding="utf-8") as fabstp,\
+		 open(directory+"id_title_prep.dat",mode="w",encoding="utf-8") as ftitlep,\
+		 open(directory+"id_title_abstract.dat",mode="w",encoding="utf-8") as fboth,\
+		 open(directory+"id_title_abstract_prep.dat",mode="w",encoding="utf-8") as fbothp:
+			new_id=-1
+			for l in f:
+
+				id_,rest=l.split(" ",1)
+				sys.stderr.write("processing entry "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
+				rest=rest.strip()
+				rest=rest[1:-1] #removes '. DO NOT strip() after that because we need to detect a double space in the beginning
+				try:
+					title_raw,abstract_raw=re.split("  ",rest,1)
+					#we find a double-space, the title is correctly indicated
+					title_raw=title_raw.strip()
+					if len(title_raw)<1: #but the title is missing, we discard the entry
+						sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
+						continue
+					#the title is indicated, and is non empty : we accept this partition
+					new_id+=1
+					id_update[new_id]=id_
+
+					title=utilsperso.preprocess_text(title_raw,keep_all_words=True,separate_sentences=False,return_lemmas=False)
+					title_out=[x.text for x in title]
+					title_prep=[x.lemma_ for x in title if not x.is_stop and not x.is_punct]
+
+					abstract=utilsperso.preprocess_text(abstract_raw,keep_all_words=True,separate_sentences=False,return_lemmas=False)
+					abstract_out=[x.text for x in abstract]
+					abstract_prep=[x.lemma_ for x in abstract if not x.is_stop and not x.is_punct]
+					
+				except ValueError: #didn't find a double space
+					if len(rest)<1: #totally empty entry
+						sys.stderr.write("\nignoring empty entry "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
+						continue
+					else: #there is an entry, but no double space. this entry will require to detect the title/asbtract limit
+
+						title_raw=rest.strip() #do this only after the split on double space. if the title is empty, title_raw is now an empty string
+						if len(title_raw)<1:
+							#empty title, ignore this entry
+							sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
+							continue
+
+						new_id+=1
+						id_update[new_id]=id_
+
+						title=utilsperso.preprocess_text(title_raw,keep_all_words=True,separate_sentences=False,return_lemmas=False)
+						title_count=[x for x in title if not x.is_stop and not x.is_punct] #only keeps "real" words, that matter for counting how many words
+
+						if len(title_count)<=max_words_title:#normal case, the title is not too long, we accept the title/abstract partition
+							title_out=[x.text for x in title]
+							abstract_out=abstract_raw
+							title_prep=[x.lemma_ for x in title_count]
+							abstract_prep=utilsperso.preprocess_text(abstract_raw,keep_all_words=False,separate_sentences=False,return_lemmas=True)
+
+						else:
+							#the title seems too long, we probably have the whole abstract. We're going to try a series of things to find the first sentence, and consider it the title
+							#once we determine where is the limit between title and abstract, we'll need to have the whole abstract somewhere. so we go back to before we attempted to separate title from abstract
+							#normally "title" and "rest" should have the same content, but just to be sure we have the whole title+abstract,we go back to "rest"
+							sents=utilsperso.preprocess_text(rest,return_lemmas=False,separate_sentences=True,keep_all_words=True)
+							#then we attempt to separate that into title and abstract. We're going to try to detect the first sentence of the text, and consider that the title
+							#first we try scipy's native sentence tokeniser
+							#return_lemmas=False because we need to access the raw token to see if it had a capital
+							#keep_all_words because we need to check if a stopword has a capital
+							sent1=sents[0] #only the first sentence
+							title_count=[x for x in sent1 if not x.is_stop and not x.is_punct]
+							if len(title_count)<=max_words_title:
+								#it worked, the title isn't too long. we accept this partition
+								abstract=sents[1:] #rest of the sentences
+								title=sent1 #first sentence
+								title_out=[x.text for x in title]
+								title_prep=[x.lemma_ for x in title_count]
+								#abstract : flatten/join sentences
+								abstract2=[]
+								abstract_prep=[]
+								for sent in abstract:
+									for token in sent:
+										abstract2.append(token.text)
+										if token.is_stop or token.is_punct:
+											pass
+										else:
+											abstract_prep.append(token.lemma_)
+								abstract_out=abstract2
+
+
+							else: #we still have too many words, we assume the first sentence wasn't correctly identified
+								#we try to detect the first sentence manually using capitals
+								boundary=0
+								for i,word in enumerate(sent1):
+									if i<4: #we assume the title has at least 3 words
+										pass
+									elif word.text.isupper(): #if all the characters in the word are uppercase, it's an acronym, so no sentences boundary
+										pass
+									elif word.text[0].isupper(): #the word has a capital in the beginning : this is a sentence boundary. we cut here.
+										boundary=i
+										break
+									else: #normal word, not a sentence boundary
+										pass
+
+								first_sentence_count=[x for x in sent1[:boundary] if not x.is_stop and not x.is_punct]
+								if len(first_sentence_count)>max_words_title: #still too many words ? just cut the tail
+									title2=sent1[:max_words_title]
+									abstract=sent1[max_words_title:]
+								else:
+									title2=sent1[:boundary]
+									abstract=sent1[boundary:]
+								#add the next sentences to the abstract
+								for sent in sents[1:]:
+									abstract+=sent
+									
+								title_out=[x.text for x in title2]
+								title_prep=[x.lemma_ for x in title2 if not x.is_stop and not x.is_punct]
+								abstract_out=[x.text for x in abstract]
+								abstract_prep=[x.lemma_ for x in abstract if not x.is_stop and not x.is_punct]
+
+				for var,fname,join in [[title_out,ftitle,False],[title_prep,ftitlep,False],[abstract_out,fabst,False],[abstract_prep,fabstp,False],[[title_out,abstract_out],fboth,True],[[title_prep,abstract_prep],fbothp,True]]:
+
+					if len(var)<1:
+						raise ValueError("warning, entry "+str(id_)+" is empty")
+
+					if not join: #normal case 
+						if type(var)==list: #join words
+							var=" ".join(var)
+						fname.write(str(new_id)+"\t"+var+"\n")
+
+					else: #special case of title+abstract
+						#var contains 2 texts instead of one, we need to join them, knowing that each can be a string or a list
+						v2=[]
+						for v in var:
+							if type(v)==list:
+								v=" ".join(v)
+							v2.append(v)
+						v2=" ".join(v2)
+						fname.write(str(new_id)+"\t"+v2+"\n")
+					
+					
+	except KeyboardInterrupt:
+		pass #manually break loop
+	except Exception: #just to avoid overwriting in the terminal the message showing on which line it broke
+		sys.stderr.write("\n")
+		raise
+	sys.stderr.write("\n")
 	
+	with open("acm_id_update.txt",mode="w",encoding="utf-8") as f:
+		f.write("new_id old_id\n")
+		for new_id in id_update:
+			f.write(str(new_id)+" "+str(id_update[new_id])+"\n")
 
 def extract_acm():
 	"""main function if the corpus is acm"""
 
+
 	out_folder="/home/sam/work/corpora/acm output"
 
-	make_vocabulary=False #alter the behaviour of the whole script. Instead of the normal output, outputs vocabulary files (word lists). Must be done once before normal use, to generate "words_title.txt" and "words_abstract.txt"
+	make_vocabulary=True #alter the behaviour of the whole script. Instead of the normal output, outputs vocabulary files (word lists). Must be done once before normal use, to generate "words_title.txt" and "words_abstract.txt"
 
+	#options for keeping only top words per document, instead of all words
 	only_keep_top_words=True #only keep the top N words per entry, according to tf-idf score
 	top_words_amount=20 #if only_keep_top_words=True, how many words per entry ?
 
+	#options for glove
 	glove_dimensions=50
 	glove_max_word_len=150 #max number of words in an article. every article is padded/cut with 0s to match this length
 	if only_keep_top_words:
 		glove_max_word_len=top_words_amount
 	glove_max_word_len=glove_max_word_len*glove_dimensions
 
-	#load word info
+	#load idf
 	idf=utilsperso.finish_idf("acm_idf.pickle") #make it with idf_acm()
 
-	#load word ids
+	#load word ids, used by several methods
 	#generated with this same script, using option make_vocabulary
 	words_id_title={}
 	with open("aman git/words_title.txt",mode="r",encoding="utf-8") as f:
@@ -404,6 +573,8 @@ def extract_acm():
 			l=l.strip()
 			words_id_abstract[l]=int(i)
 
+	#load info for glove
+	#the glove vectors files is generated directly by glove, none of my own code
 	glove_vectors={}
 	with open("/home/sam/work/corpora/acm output/acm/glovevectors.txt",mode="r",encoding="utf-8") as f:
 		for l in f:
@@ -415,58 +586,57 @@ def extract_acm():
 			glove_vectors[word]=vector
 
 
-	missing_title_id=[] #keep in memory which entries have a missing title, so we can skip them when working on the abstract
-	title_word_list=set([]) #need these 2 var on first pass only, to build the word list
+	title_word_list=set([]) #need these 2 var on first pass only (make_vocabulary), to build the word list
 	abstract_word_list=set([])
 
+
+	#doc2vec
+	from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+	documents_training=[] #used once on first pass to train doc2vec. not needed in normal use
+	doc2vec_training_pass=False #if this the first, training pass, or not ?
+	if not doc2vec_training_pass:
+		try:
+			model50=Doc2Vec.load("doc2vec_model_50")
+			model100=Doc2Vec.load("doc2vec_model_100")
+			model300=Doc2Vec.load("doc2vec_model_300")
+		except FileNotFoundError:
+			raise FileNotFoundError("doc2vec trained model not found. Have you trained the model first ? If you are attempting to train the model now, disable the attempt to load the model (just this try/except structure)")
+
+	#start
 	try :
 		for text_type in ["title","abstract"]:
 
 			sys.stderr.write("\n")
 
-			with open("/home/sam/work/corpora/acm/id_"+text_type+".dat",mode="r",encoding="utf-8") as f,\
+			with open("/home/sam/work/corpora/acm/id_"+text_type+"_prep.dat",mode="r",encoding="utf-8") as f,\
 			open(out_folder+"/id_"+text_type+"_tfidf_score.dat",mode="w",encoding="utf-8") as f_idf,\
 			open(out_folder+"/id_"+text_type+"_binary.dat",mode="w",encoding="utf-8") as f_binary,\
-			open(out_folder+"/id_"+text_type+"_glove.dat",mode="w",encoding="utf-8") as f_glove:
+			open(out_folder+"/id_"+text_type+"_glove.dat",mode="w",encoding="utf-8") as f_glove,\
+			open(out_folder+"/id_"+text_type+"_doc2vec50.dat",mode="w",encoding="utf-8") as f_doc2vec50,\
+			open(out_folder+"/id_"+text_type+"_doc2vec100.dat",mode="w",encoding="utf-8") as f_doc2vec100,\
+			open(out_folder+"/id_"+text_type+"_doc2vec300.dat",mode="w",encoding="utf-8") as f_doc2vec300:
 				for l in f:
-					
+					l=l.strip()
 
 					#clean up + preprocessing
 					if text_type=="title":
 						id_,title=l.split("\t")
 						sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
-						title=title.strip() #do this after split on \t, otherwise it removes the \t at the end of the line if the title is empty, which confuses the above code
-						if len(title)<1:
-							#empty title, ignore this entry and keep the id to remember to also ignore this entry on the "abstract" pass
-							sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
-							missing_title_id.append(id_) #index by id_, not by line number, since we're ignoring some lines
-							continue
-
-						else:
-							nb_words=len(title.split(" "))
-							if nb_words>80:
-								#the title seems too long, we probably have the whole abstract. In that case, we only keep the first sentence
-								title=utilsperso.preprocess_text(title,return_lemmas=True,separate_sentences=True)
-								title=title[0]
-							else:
-								title=utilsperso.preprocess_text(title,return_lemmas=True,separate_sentences=False)
-							text=title
+						#title=utilsperso.preprocess_text(title,return_lemmas=True) #no need if the input file is preprocessed already
+						text=title.split(" ")
+						if len(text)<1:
+							print("\n warning empty title, this shouldn't append",id_,"\n")
+							raise ValueError
 
 					elif text_type=="abstract":
-						id_=l.split(" ",1)[0]
+						id_,abstract=l.split("\t")
 						sys.stderr.write("processing abstract "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
-						if id_ in missing_title_id:
-							sys.stderr.write("\nignoring abstract "+id_+" because of empty title ("+str(int(int(id_)/12498.0*100))+"%)\n")
-							continue #missing title, remove this entry from data
-						l=re.sub("^\d+ '","",l) #removes the numerical id at the start of each line + opening '
-						l=l[:-1] #removes ending ' at the end of the line
-						l=l.strip()
-						text=l
+						text=abstract.split(" ")
 						if len(text)<1:
 							print("\n warning empty abstract, this shouldn't append",id_,"\n")
 							raise ValueError
-						text=utilsperso.preprocess_text(text,return_lemmas=True)
-
+						#text=utilsperso.preprocess_text(text,return_lemmas=True) #no need if the input file is preprocessed already
+						
 
 					#populates a list of all words found in the corpus. useful to prune vocabulary. run once on first pass.
 					if make_vocabulary:
@@ -496,9 +666,12 @@ def extract_acm():
 							text2.append(word)
 					else:
 						text2=text
+
+					#text=all words and text2=N top common words, ordered from most to less common
+					#writing output starts here
 	
-					output_binary=[str(id_)]
-					output_tfidf=[str(id_)]
+					output_binary=[]
+					output_tfidf=[]
 					#translate the word into word_id and add to output
 					for word in text2:
 						try:
@@ -515,26 +688,63 @@ def extract_acm():
 						output_tfidf.append(str(word_id)+"|"+str(score))
 
 					#finish output
-					f_binary.write(" ".join(output_binary)+"\n")
-					f_idf.write(" ".join(output_tfidf)+"\n")
+					f_binary.write(str(id_)+"\t"+(" ".join(output_binary))+"\n")
+					f_idf.write(str(id_)+"\t"+(" ".join(output_tfidf))+"\n")
 
 
 					###glove
-					article_vector=[]
+					article_vector=[] #a flat list of all vectors. each word is multiple vectors, they're not kept in sub-lists.
 					for word in text2:
 						if len(article_vector)>glove_max_word_len: #if the text is too long,stop when we have reached the max amount of words
 							#glove_max_word_len is already multiplied by the number of dimensions
 							break
-						try:
+
+						#try to find the word in our vocabulary, and add corresponding vector to article_vector if available. otherwise, add a zero vector in the missing word place
+						#this code attempts to find missing words by more tokenisation, so some words may be cut into several words. that's why we add the word_vector to the article_vector inside the if/else structure, and not at the end of it, to keep the number of words correct
+						if word in glove_vectors: #normal case, we find the word no problem
 							word_vector=glove_vectors[word]
-						except: #word is out of vocabulary
-							word_vector=[0.0]*glove_dimensions
-						article_vector+=word_vector
+							article_vector+=word_vector
+						else: #word is out of vocabulary
+							#try with different tokenisation
+							#if we don't find at least one word that way, we don't keep the further tokenisation and just add ONE zero vector, in order to avoid having MORE zero words
+							if " " in word:
+								words=word.split(" ")
+								tmp_vector=[]
+								at_least_one_found=False
+								for word in words:
+									if word in glove_vectors:
+										word_vector=glove_vectors_[word]
+										at_least_one_found=True
+									else:
+										word_vector=[0.0]*glove_dimensions
+									tmp_vector+=word_vector
+								if at_least_one_found:
+									document_vector+=tmp_vector
+								else: #we add just one word worth of zeroes
+									word_vector=[0.0]*glove_dimensions
+									document_vector+=word_vector
+							else:
+								word_vector=[0.0]*glove_dimensions
+								article_vector+=word_vector
+
+					#glove : we're done collecting vectors for each word
 					while len(article_vector)<glove_max_word_len: #if the text is too short, pad with zeroes until we reach the max amount of words
-						article_vector.append(0.0)
-					article_vector.insert(0,id_) #add the ID at the beginning of the line. we do this at the end to not offset the number of words
-					article_vector=[str(x) for x in article_vector]
-					f_glove.write(" ".join(article_vector)+"\n")
+						word_vector=[0.0]*glove_dimensions
+						article_vector+=word_vector
+					article_vector=[str(x) for x in article_vector] #to be able to write to output file. " ".join() doesn't work on int
+					f_glove.write(str(id_)+"\t"+(" ".join(article_vector))+"\n")
+
+					### doc2vec
+					if doc2vec_training_pass : #training, on first pass only
+						documents_training.append(TaggedDocument(text,id_))
+					else: #produce document vectors, normal use
+						for model,f in [(model50,f_doc2vec50),(model100,f_doc2vec100),(model300,f_doc2vec300)]:
+							document_vector=model.infer_vector(text)
+							document_vector=[str(x) for x in document_vector]
+							document_vector=" ".join(document_vector)
+							f.write(id_+"\t"+document_vector+"\n")
+
+						
 	except KeyboardInterrupt:
 		pass #manually break loop
 	except Exception: #just to avoid overwriting in the terminal the message showing on which line it broke
@@ -551,6 +761,11 @@ def extract_acm():
 			for word in abstract_word_list:
 				f.write(word+"\n")
 		return
+
+	if doc2vec_training_pass:
+		model = Doc2Vec(documents_training, vector_size=300, window=4, min_count=1, workers=4) #workers=number of cores on the machine, for multithreading
+		model.delete_temporary_training_data(keep_doctags_vectors=True, keep_inference=True) #makes it impossible to further train, but reduce size of file
+		model.save("doc2vec_model_300")
 
 
 def idf_acm():
@@ -732,7 +947,6 @@ def extract_acl_anthology(root_directory,output_directory):
 	with open(output_directory+"/id_words.dat",mode="w",encoding="utf-8") as fwords :
 		for word in word_matrix:
 			fwords.write(word+"\n")
-
 
 
 def extract_canceropole(root_directory):
@@ -956,7 +1170,8 @@ def count_sections(source):
 if __name__=="__main__":
 	#extract_canceropole("fulltext_tei/all")
 	#extract_acl_anthology("/home/sam/work/corpora/acl","aman_output/acl")
-	extract_acm()
+	correct_acm_entry()
+	#extract_acm()
 	#bert_test()
 
 	

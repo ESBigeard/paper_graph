@@ -15,6 +15,7 @@ import numpy as np
 import utilsperso
 import spacy
 import bibtexparser #https://github.com/sciunto-org/python-bibtexparser
+from scipy.sparse import coo_matrix
 #nlp=spacy.load("en_core_web_sm")
 
 #idf=utilsperso.finish_idf("27_07_tei_idf.pickle") #put here the .pickle file containing an idf
@@ -386,6 +387,7 @@ def correct_acm_entry():
 	id_update={}#saves the correspondence old id/new id, just in case
 
 	directory="/home/sam/work/corpora/acm/"
+	tfmatrix_full={}
 
 	try :
 		with open(directory+"id_abstract_old.dat",mode="r",encoding="utf-8") as f,\
@@ -397,6 +399,8 @@ def correct_acm_entry():
 		 open(directory+"id_title_abstract_prep.dat",mode="w",encoding="utf-8") as fbothp:
 			new_id=-1
 			for l in f:
+				
+				debug_path=""
 
 				id_,rest=l.split(" ",1)
 				sys.stderr.write("processing entry "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
@@ -410,12 +414,16 @@ def correct_acm_entry():
 						sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
 						continue
 					#the title is indicated, and is non empty : we accept this partition
+					debug_path+=" double-space "
 					new_id+=1
 					id_update[new_id]=id_
 
 					title=utilsperso.preprocess_text(title_raw,keep_all_words=True,separate_sentences=False,return_lemmas=False)
 					title_out=[x.text for x in title]
 					title_prep=[x.lemma_ for x in title if not x.is_stop and not x.is_punct]
+					if len(title_prep)<1: #the whole title is stopwords. why, authors ??
+						title_prep=[x.lemma_ for x in title if not x.is_punct]
+						debug_path+=" add_stopwords "
 
 					abstract=utilsperso.preprocess_text(abstract_raw,keep_all_words=True,separate_sentences=False,return_lemmas=False)
 					abstract_out=[x.text for x in abstract]
@@ -425,13 +433,24 @@ def correct_acm_entry():
 					if len(rest)<1: #totally empty entry
 						sys.stderr.write("\nignoring empty entry "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
 						continue
-					else: #there is an entry, but no double space. this entry will require to detect the title/asbtract limit
+					else: #there is an entry, but no double space.
+						#if the entry starts with a single double space, and has no double space later, then the title is missing
+						#(It's not always the case infortunately, sometimes you have entries with a single space at the beginning, and double spaces peppered in the abstract, which have the title missing. in those case we mistakenly identify a title earlier.)
+						if rest[0]==" ":
+							#we assume the title is missing, we skip this entry
+							sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
+							continue
 
-						title_raw=rest.strip() #do this only after the split on double space. if the title is empty, title_raw is now an empty string
+
+
+						title_raw=rest.strip() #do this only after the split on double space and check on first space. if the title is empty, title_raw is now an empty string
 						if len(title_raw)<1:
 							#empty title, ignore this entry
 							sys.stderr.write("\nignoring empty title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\n")
 							continue
+
+						#if we reach this point, we have established that there is a title, but we need to detect it ourselves.
+						#the following code attempts to detect the title/abstract boundary
 
 						new_id+=1
 						id_update[new_id]=id_
@@ -440,6 +459,8 @@ def correct_acm_entry():
 						title_count=[x for x in title if not x.is_stop and not x.is_punct] #only keeps "real" words, that matter for counting how many words
 
 						if len(title_count)<=max_words_title:#normal case, the title is not too long, we accept the title/abstract partition
+							debug_path+=" too_short "
+							raise ValueError("hey")
 							title_out=[x.text for x in title]
 							abstract_out=abstract_raw
 							title_prep=[x.lemma_ for x in title_count]
@@ -458,6 +479,7 @@ def correct_acm_entry():
 							title_count=[x for x in sent1 if not x.is_stop and not x.is_punct]
 							if len(title_count)<=max_words_title:
 								#it worked, the title isn't too long. we accept this partition
+								debug_path+=" spacy_sent "
 								abstract=sents[1:] #rest of the sentences
 								title=sent1 #first sentence
 								title_out=[x.text for x in title]
@@ -490,10 +512,13 @@ def correct_acm_entry():
 										pass
 
 								first_sentence_count=[x for x in sent1[:boundary] if not x.is_stop and not x.is_punct]
-								if len(first_sentence_count)>max_words_title: #still too many words ? just cut the tail
+								if boundary==0 or len(first_sentence_count)>max_words_title: #still too many words ? just cut the tail
+									#boundary=0 if no capital was encountered in the previous loop
+									debug_path+=" tail_cut "
 									title2=sent1[:max_words_title]
 									abstract=sent1[max_words_title:]
 								else:
+									debug_path+=" capital "
 									title2=sent1[:boundary]
 									abstract=sent1[boundary:]
 								#add the next sentences to the abstract
@@ -508,7 +533,7 @@ def correct_acm_entry():
 				for var,fname,join in [[title_out,ftitle,False],[title_prep,ftitlep,False],[abstract_out,fabst,False],[abstract_prep,fabstp,False],[[title_out,abstract_out],fboth,True],[[title_prep,abstract_prep],fbothp,True]]:
 
 					if len(var)<1:
-						raise ValueError("warning, entry "+str(id_)+" is empty")
+						raise ValueError("warning, entry old id "+str(id_)+" is empty, debug path : "+debug_path)
 
 					if not join: #normal case 
 						if type(var)==list: #join words
@@ -541,10 +566,11 @@ def correct_acm_entry():
 def extract_acm():
 	"""main function if the corpus is acm"""
 
+	skip=True #if I'm working on something I might deactivate some parts of the code to save time. turn this to False for the code to run everything
 
 	out_folder="/home/sam/work/corpora/acm output"
 
-	make_vocabulary=True #alter the behaviour of the whole script. Instead of the normal output, outputs vocabulary files (word lists). Must be done once before normal use, to generate "words_title.txt" and "words_abstract.txt"
+	make_vocabulary=False #alter the behaviour of the whole script. Instead of the normal output, outputs vocabulary files (word lists). Must be done once before normal use, to generate "words_title.txt" and "words_abstract.txt"
 
 	#options for keeping only top words per document, instead of all words
 	only_keep_top_words=True #only keep the top N words per entry, according to tf-idf score
@@ -558,17 +584,17 @@ def extract_acm():
 	glove_max_word_len=glove_max_word_len*glove_dimensions
 
 	#load idf
-	idf=utilsperso.finish_idf("acm_idf.pickle") #make it with idf_acm()
+	idf=utilsperso.finish_idf("22_10_acm_abstract_title.pickle") #make it with idf_acm()
 
 	#load word ids, used by several methods
 	#generated with this same script, using option make_vocabulary
 	words_id_title={}
-	with open("aman git/words_title.txt",mode="r",encoding="utf-8") as f:
+	with open("/home/sam/work/corpora/acm output/resources/words_title.txt",mode="r",encoding="utf-8") as f:
 		for i,l in enumerate(f):
 			l=l.strip()
 			words_id_title[l]=int(i)
 	words_id_abstract={}
-	with open("aman git/words_abstract.txt",mode="r",encoding="utf-8") as f:
+	with open("/home/sam/work/corpora/acm output/resources/words_abstract.txt",mode="r",encoding="utf-8") as f:
 		for i,l in enumerate(f):
 			l=l.strip()
 			words_id_abstract[l]=int(i)
@@ -576,7 +602,7 @@ def extract_acm():
 	#load info for glove
 	#the glove vectors files is generated directly by glove, none of my own code
 	glove_vectors={}
-	with open("/home/sam/work/corpora/acm output/acm/glovevectors.txt",mode="r",encoding="utf-8") as f:
+	with open("/home/sam/work/corpora/acm output/resources/glovevectors.txt",mode="r",encoding="utf-8") as f:
 		for l in f:
 			l=l.strip()
 			entry=l.split(" ")
@@ -607,6 +633,7 @@ def extract_acm():
 		for text_type in ["title","abstract"]:
 
 			sys.stderr.write("\n")
+			total_idf_matrix=[] #for output pickled scipy sparce matrix
 
 			with open("/home/sam/work/corpora/acm/id_"+text_type+"_prep.dat",mode="r",encoding="utf-8") as f,\
 			open(out_folder+"/id_"+text_type+"_tfidf_score.dat",mode="w",encoding="utf-8") as f_idf,\
@@ -621,7 +648,7 @@ def extract_acm():
 					#clean up + preprocessing
 					if text_type=="title":
 						id_,title=l.split("\t")
-						sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
+						sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/11049.0*100))+"%)\r")
 						#title=utilsperso.preprocess_text(title,return_lemmas=True) #no need if the input file is preprocessed already
 						text=title.split(" ")
 						if len(text)<1:
@@ -630,7 +657,7 @@ def extract_acm():
 
 					elif text_type=="abstract":
 						id_,abstract=l.split("\t")
-						sys.stderr.write("processing abstract "+id_+" ("+str(int(int(id_)/12498.0*100))+"%)\r")
+						sys.stderr.write("processing abstract "+id_+" ("+str(int(int(id_)/11049.0*100))+"%)\r")
 						text=abstract.split(" ")
 						if len(text)<1:
 							print("\n warning empty abstract, this shouldn't append",id_,"\n")
@@ -651,6 +678,7 @@ def extract_acm():
 					###binary + tf-idf
 					tf=utilsperso.count_text_tfidf(text,idf) #dictionnary[word]=tf-idf score of the word
 					tf_by_score={}
+
 
 					#reverse tf dict
 					for word in tf:
@@ -673,23 +701,40 @@ def extract_acm():
 					output_binary=[]
 					output_tfidf=[]
 					#translate the word into word_id and add to output
-					for word in text2:
-						try:
-							if text_type=="title":
-								word_id=words_id_title[word]
+					if True: #version txt output
+						for word in text2:
+							try:
+								if text_type=="title":
+									word_id=words_id_title[word]
+								else:
+									word_id=words_id_abstract[word]
+							except KeyError:
+								sys.stderr.write("\nError : word '"+word+"' missing from vocabulary. Check that the text is lemmatised and that you have loaded the correct vocabulary file\n")
+								raise
+
+							score=tf[word]
+							output_binary.append(str(word_id))
+							output_tfidf.append(str(word_id)+"|"+str(score))
+
+						#finish output
+						f_binary.write(str(id_)+"\t"+(" ".join(output_binary))+"\n")
+						f_idf.write(str(id_)+"\t"+(" ".join(output_tfidf))+"\n")
+					
+					if True: #version matrix output
+
+						#matrix
+						tfmatrix=[]
+						if text_type=="title":
+							words_id_dic=words_id_title
+						else:
+							words_id_dic=words_id_abstract
+						for word in words_id_dic:
+							if word in text2:
+								tfmatrix.append(tf[word])
 							else:
-								word_id=words_id_abstract[word]
-						except KeyError:
-							sys.stderr.write("\nError : word '"+word+"' missing from vocabulary. Check that the text is lemmatised and that you have loaded the correct vocabulary file\n")
-							raise
+								tfmatrix.append(0.0)
+						total_idf_matrix.append(tfmatrix)
 
-						score=tf[word]
-						output_binary.append(str(word_id))
-						output_tfidf.append(str(word_id)+"|"+str(score))
-
-					#finish output
-					f_binary.write(str(id_)+"\t"+(" ".join(output_binary))+"\n")
-					f_idf.write(str(id_)+"\t"+(" ".join(output_tfidf))+"\n")
 
 
 					###glove
@@ -743,8 +788,13 @@ def extract_acm():
 							document_vector=[str(x) for x in document_vector]
 							document_vector=" ".join(document_vector)
 							f.write(id_+"\t"+document_vector+"\n")
+				#end of for line loop
 
-						
+				with open(out_folder+"/id_"+text_type+"_tfidf.pickle",mode="wb") as f_matrix:
+					total_idf_matrix=coo_matrix(total_idf_matrix)
+					pickle.dump(total_idf_matrix,f_matrix)
+
+
 	except KeyboardInterrupt:
 		pass #manually break loop
 	except Exception: #just to avoid overwriting in the terminal the message showing on which line it broke
@@ -752,6 +802,8 @@ def extract_acm():
 		raise
 	
 	sys.stderr.write("\n")
+
+
 		
 	if make_vocabulary: #only on first pass. makes a list of encountered words, so we can make a word index as small as possible
 		with open("words_title.txt",mode="w",encoding="utf-8") as f:
@@ -1170,8 +1222,8 @@ def count_sections(source):
 if __name__=="__main__":
 	#extract_canceropole("fulltext_tei/all")
 	#extract_acl_anthology("/home/sam/work/corpora/acl","aman_output/acl")
-	correct_acm_entry()
-	#extract_acm()
+	#correct_acm_entry()
+	extract_acm()
 	#bert_test()
 
 	

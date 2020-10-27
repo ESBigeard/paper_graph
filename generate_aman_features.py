@@ -10,6 +10,7 @@ import csv
 import pandas as pd
 from bs4 import BeautifulSoup
 from collections import defaultdict
+from collections import Counter
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import utilsperso
@@ -629,181 +630,180 @@ def extract_acm():
 			raise FileNotFoundError("doc2vec trained model not found. Have you trained the model first ? If you are attempting to train the model now, disable the attempt to load the model (just this try/except structure)")
 
 	#start
-	try :
-		for text_type in ["title","abstract"]:
+	if not skip:
+		try :
+			for text_type in ["title","abstract"]:
 
-			sys.stderr.write("\n")
-			total_idf_matrix=[] #for output pickled scipy sparce matrix
+				sys.stderr.write("\n")
+				total_idf_matrix=[] #for output pickled scipy sparce matrix
 
-			with open("/home/sam/work/corpora/acm/id_"+text_type+"_prep.dat",mode="r",encoding="utf-8") as f,\
-			open(out_folder+"/id_"+text_type+"_tfidf_score.dat",mode="w",encoding="utf-8") as f_idf,\
-			open(out_folder+"/id_"+text_type+"_binary.dat",mode="w",encoding="utf-8") as f_binary,\
-			open(out_folder+"/id_"+text_type+"_glove.dat",mode="w",encoding="utf-8") as f_glove,\
-			open(out_folder+"/id_"+text_type+"_doc2vec50.dat",mode="w",encoding="utf-8") as f_doc2vec50,\
-			open(out_folder+"/id_"+text_type+"_doc2vec100.dat",mode="w",encoding="utf-8") as f_doc2vec100,\
-			open(out_folder+"/id_"+text_type+"_doc2vec300.dat",mode="w",encoding="utf-8") as f_doc2vec300:
-				for l in f:
-					l=l.strip()
+				with open("/home/sam/work/corpora/acm/id_"+text_type+"_prep.dat",mode="r",encoding="utf-8") as f,\
+				open(out_folder+"/id_"+text_type+"_tfidf_score.dat",mode="w",encoding="utf-8") as f_idf,\
+				open(out_folder+"/id_"+text_type+"_binary.dat",mode="w",encoding="utf-8") as f_binary,\
+				open(out_folder+"/id_"+text_type+"_glove.dat",mode="w",encoding="utf-8") as f_glove,\
+				open(out_folder+"/id_"+text_type+"_doc2vec50.dat",mode="w",encoding="utf-8") as f_doc2vec50,\
+				open(out_folder+"/id_"+text_type+"_doc2vec100.dat",mode="w",encoding="utf-8") as f_doc2vec100,\
+				open(out_folder+"/id_"+text_type+"_doc2vec300.dat",mode="w",encoding="utf-8") as f_doc2vec300:
+					for l in f:
+						l=l.strip()
 
-					#clean up + preprocessing
-					if text_type=="title":
-						id_,title=l.split("\t")
-						sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/11049.0*100))+"%)\r")
-						#title=utilsperso.preprocess_text(title,return_lemmas=True) #no need if the input file is preprocessed already
-						text=title.split(" ")
-						if len(text)<1:
-							print("\n warning empty title, this shouldn't append",id_,"\n")
-							raise ValueError
-
-					elif text_type=="abstract":
-						id_,abstract=l.split("\t")
-						sys.stderr.write("processing abstract "+id_+" ("+str(int(int(id_)/11049.0*100))+"%)\r")
-						text=abstract.split(" ")
-						if len(text)<1:
-							print("\n warning empty abstract, this shouldn't append",id_,"\n")
-							raise ValueError
-						#text=utilsperso.preprocess_text(text,return_lemmas=True) #no need if the input file is preprocessed already
-						
-
-					#populates a list of all words found in the corpus. useful to prune vocabulary. run once on first pass.
-					if make_vocabulary:
-						for word in text:
-							if text_type=="title":
-								title_word_list.add(word)
-							else:
-								abstract_word_list.add(word)
-						continue
-
-
-					###binary + tf-idf
-					tf=utilsperso.count_text_tfidf(text,idf) #dictionnary[word]=tf-idf score of the word
-					tf_by_score={}
-
-
-					#reverse tf dict
-					for word in tf:
-						score=tf[word]
-						tf_by_score[score]=word
-
-					#keep only words with best score
-					text2=[] #the text, but with only the words we want to keep. if only_keep_top_words=True, this is only the top N words by tf-idf. Otherwise, it's the same as variable 'text'
-					if only_keep_top_words:
-						#we order the words by score, and only add the words with the best score to text2
-						for score in sorted(tf_by_score)[:top_words_amount]:
-							word=tf_by_score[score]
-							text2.append(word)
-					else:
-						text2=text
-
-					#text=all words and text2=N top common words, ordered from most to less common
-					#writing output starts here
-	
-					output_binary=[]
-					output_tfidf=[]
-					#translate the word into word_id and add to output
-					if True: #version txt output
-						for word in text2:
-							try:
-								if text_type=="title":
-									word_id=words_id_title[word]
-								else:
-									word_id=words_id_abstract[word]
-							except KeyError:
-								sys.stderr.write("\nError : word '"+word+"' missing from vocabulary. Check that the text is lemmatised and that you have loaded the correct vocabulary file\n")
-								raise
-
-							score=tf[word]
-							output_binary.append(str(word_id))
-							output_tfidf.append(str(word_id)+"|"+str(score))
-
-						#finish output
-						f_binary.write(str(id_)+"\t"+(" ".join(output_binary))+"\n")
-						f_idf.write(str(id_)+"\t"+(" ".join(output_tfidf))+"\n")
-					
-					if True: #version matrix output
-
-						#matrix
-						tfmatrix=[]
+						#clean up + preprocessing
 						if text_type=="title":
-							words_id_dic=words_id_title
+							id_,title=l.split("\t")
+							sys.stderr.write("processing title "+id_+" ("+str(int(int(id_)/11049.0*100))+"%)\r")
+							#title=utilsperso.preprocess_text(title,return_lemmas=True) #no need if the input file is preprocessed already
+							text=title.split(" ")
+							if len(text)<1:
+								print("\n warning empty title, this shouldn't append",id_,"\n")
+								raise ValueError
+
+						elif text_type=="abstract":
+							id_,abstract=l.split("\t")
+							sys.stderr.write("processing abstract "+id_+" ("+str(int(int(id_)/11049.0*100))+"%)\r")
+							text=abstract.split(" ")
+							if len(text)<1:
+								print("\n warning empty abstract, this shouldn't append",id_,"\n")
+								raise ValueError
+							#text=utilsperso.preprocess_text(text,return_lemmas=True) #no need if the input file is preprocessed already
+							
+
+						#populates a list of all words found in the corpus. useful to prune vocabulary. run once on first pass.
+						if make_vocabulary:
+							for word in text:
+								if text_type=="title":
+									title_word_list.add(word)
+								else:
+									abstract_word_list.add(word)
+							continue
+
+
+						###binary + tf-idf
+						tf=utilsperso.count_text_tfidf(text,idf) #dictionnary[word]=tf-idf score of the word
+						tf_by_score={}
+
+
+						#reverse tf dict
+						for word in tf:
+							score=tf[word]
+							tf_by_score[score]=word
+
+						#keep only words with best score
+						text2=[] #the text, but with only the words we want to keep. if only_keep_top_words=True, this is only the top N words by tf-idf. Otherwise, it's the same as variable 'text'
+						if only_keep_top_words:
+							#we order the words by score, and only add the words with the best score to text2
+							for score in sorted(tf_by_score)[:top_words_amount]:
+								word=tf_by_score[score]
+								text2.append(word)
 						else:
-							words_id_dic=words_id_abstract
-						for word in words_id_dic:
-							if word in text2:
-								tfmatrix.append(tf[word])
-							else:
-								tfmatrix.append(0.0)
-						total_idf_matrix.append(tfmatrix)
+							text2=text
 
-
-
-					###glove
-					article_vector=[] #a flat list of all vectors. each word is multiple vectors, they're not kept in sub-lists.
-					for word in text2:
-						if len(article_vector)>glove_max_word_len: #if the text is too long,stop when we have reached the max amount of words
-							#glove_max_word_len is already multiplied by the number of dimensions
-							break
-
-						#try to find the word in our vocabulary, and add corresponding vector to article_vector if available. otherwise, add a zero vector in the missing word place
-						#this code attempts to find missing words by more tokenisation, so some words may be cut into several words. that's why we add the word_vector to the article_vector inside the if/else structure, and not at the end of it, to keep the number of words correct
-						if word in glove_vectors: #normal case, we find the word no problem
-							word_vector=glove_vectors[word]
-							article_vector+=word_vector
-						else: #word is out of vocabulary
-							#try with different tokenisation
-							#if we don't find at least one word that way, we don't keep the further tokenisation and just add ONE zero vector, in order to avoid having MORE zero words
-							if " " in word:
-								words=word.split(" ")
-								tmp_vector=[]
-								at_least_one_found=False
-								for word in words:
-									if word in glove_vectors:
-										word_vector=glove_vectors_[word]
-										at_least_one_found=True
+						#text=all words and text2=N top common words, ordered from most to less common
+						#writing output starts here
+		
+						output_binary=[]
+						output_tfidf=[]
+						#translate the word into word_id and add to output
+						if True: #version txt output
+							for word in text2:
+								try:
+									if text_type=="title":
+										word_id=words_id_title[word]
 									else:
-										word_vector=[0.0]*glove_dimensions
-									tmp_vector+=word_vector
-								if at_least_one_found:
-									document_vector+=tmp_vector
-								else: #we add just one word worth of zeroes
-									word_vector=[0.0]*glove_dimensions
-									document_vector+=word_vector
+										word_id=words_id_abstract[word]
+								except KeyError:
+									sys.stderr.write("\nError : word '"+word+"' missing from vocabulary. Check that the text is lemmatised and that you have loaded the correct vocabulary file\n")
+									raise
+
+								score=tf[word]
+								output_binary.append(str(word_id))
+								output_tfidf.append(str(word_id)+"|"+str(score))
+
+							#finish output
+							f_binary.write(str(id_)+"\t"+(" ".join(output_binary))+"\n")
+							f_idf.write(str(id_)+"\t"+(" ".join(output_tfidf))+"\n")
+						
+						if True: #version matrix output
+
+							#matrix
+							tfmatrix=[]
+							if text_type=="title":
+								words_id_dic=words_id_title
 							else:
-								word_vector=[0.0]*glove_dimensions
+								words_id_dic=words_id_abstract
+							for word in words_id_dic:
+								if word in text2:
+									tfmatrix.append(tf[word])
+								else:
+									tfmatrix.append(0.0)
+							total_idf_matrix.append(tfmatrix)
+
+
+
+						###glove
+						article_vector=[] #a flat list of all vectors. each word is multiple vectors, they're not kept in sub-lists.
+						for word in text2:
+							if len(article_vector)>glove_max_word_len: #if the text is too long,stop when we have reached the max amount of words
+								#glove_max_word_len is already multiplied by the number of dimensions
+								break
+
+							#try to find the word in our vocabulary, and add corresponding vector to article_vector if available. otherwise, add a zero vector in the missing word place
+							#this code attempts to find missing words by more tokenisation, so some words may be cut into several words. that's why we add the word_vector to the article_vector inside the if/else structure, and not at the end of it, to keep the number of words correct
+							if word in glove_vectors: #normal case, we find the word no problem
+								word_vector=glove_vectors[word]
 								article_vector+=word_vector
+							else: #word is out of vocabulary
+								#try with different tokenisation
+								#if we don't find at least one word that way, we don't keep the further tokenisation and just add ONE zero vector, in order to avoid having MORE zero words
+								if " " in word:
+									words=word.split(" ")
+									tmp_vector=[]
+									at_least_one_found=False
+									for word in words:
+										if word in glove_vectors:
+											word_vector=glove_vectors_[word]
+											at_least_one_found=True
+										else:
+											word_vector=[0.0]*glove_dimensions
+										tmp_vector+=word_vector
+									if at_least_one_found:
+										document_vector+=tmp_vector
+									else: #we add just one word worth of zeroes
+										word_vector=[0.0]*glove_dimensions
+										document_vector+=word_vector
+								else:
+									word_vector=[0.0]*glove_dimensions
+									article_vector+=word_vector
 
-					#glove : we're done collecting vectors for each word
-					while len(article_vector)<glove_max_word_len: #if the text is too short, pad with zeroes until we reach the max amount of words
-						word_vector=[0.0]*glove_dimensions
-						article_vector+=word_vector
-					article_vector=[str(x) for x in article_vector] #to be able to write to output file. " ".join() doesn't work on int
-					f_glove.write(str(id_)+"\t"+(" ".join(article_vector))+"\n")
+						#glove : we're done collecting vectors for each word
+						while len(article_vector)<glove_max_word_len: #if the text is too short, pad with zeroes until we reach the max amount of words
+							word_vector=[0.0]*glove_dimensions
+							article_vector+=word_vector
+						article_vector=[str(x) for x in article_vector] #to be able to write to output file. " ".join() doesn't work on int
+						f_glove.write(str(id_)+"\t"+(" ".join(article_vector))+"\n")
 
-					### doc2vec
-					if doc2vec_training_pass : #training, on first pass only
-						documents_training.append(TaggedDocument(text,id_))
-					else: #produce document vectors, normal use
-						for model,f in [(model50,f_doc2vec50),(model100,f_doc2vec100),(model300,f_doc2vec300)]:
-							document_vector=model.infer_vector(text)
-							document_vector=[str(x) for x in document_vector]
-							document_vector=" ".join(document_vector)
-							f.write(id_+"\t"+document_vector+"\n")
-				#end of for line loop
+						### doc2vec
+						if doc2vec_training_pass : #training, on first pass only
+							documents_training.append(TaggedDocument(text,id_))
+						else: #produce document vectors, normal use
+							for model,f in [(model50,f_doc2vec50),(model100,f_doc2vec100),(model300,f_doc2vec300)]:
+								document_vector=model.infer_vector(text)
+								document_vector=[str(x) for x in document_vector]
+								document_vector=" ".join(document_vector)
+								f.write(id_+"\t"+document_vector+"\n")
+					#end of for line loop
 
-				with open(out_folder+"/id_"+text_type+"_tfidf.pickle",mode="wb") as f_matrix:
-					total_idf_matrix=coo_matrix(total_idf_matrix)
-					pickle.dump(total_idf_matrix,f_matrix)
+					with open(out_folder+"/id_"+text_type+"_tfidf.pickle",mode="wb") as f_matrix:
+						total_idf_matrix=coo_matrix(total_idf_matrix)
+						pickle.dump(total_idf_matrix,f_matrix)
 
 
-	except KeyboardInterrupt:
-		pass #manually break loop
-	except Exception: #just to avoid overwriting in the terminal the message showing on which line it broke
-		sys.stderr.write("\n")
-		raise
+		except KeyboardInterrupt:
+			pass #manually break loop
+		except Exception: #just to avoid overwriting in the terminal the message showing on which line it broke
+			sys.stderr.write("\n")
+			raise
 	
 	sys.stderr.write("\n")
-
-
 		
 	if make_vocabulary: #only on first pass. makes a list of encountered words, so we can make a word index as small as possible
 		with open("words_title.txt",mode="w",encoding="utf-8") as f:
@@ -818,6 +818,61 @@ def extract_acm():
 		model = Doc2Vec(documents_training, vector_size=300, window=4, min_count=1, workers=4) #workers=number of cores on the machine, for multithreading
 		model.delete_temporary_training_data(keep_doctags_vectors=True, keep_inference=True) #makes it impossible to further train, but reduce size of file
 		model.save("doc2vec_model_300")
+
+
+	###author info
+
+	#find all keywords of all authors. We don't care about each keyword's score, we just register in how many papers each keyword appear
+	author_keywords={} #dict[author]=Counter of keywords
+	count_authors=Counter()
+	with open(out_folder+"/id_title_tfidf_score.dat",mode="r",encoding="utf-8") as f_matrix,\
+	open("/home/sam/work/corpora/acm/id_author.dat",mode="r",encoding="utf-8") as f_authors:
+		for lk,la in zip(f_matrix, f_authors):
+			lk=lk.strip()
+			la=la.strip()
+
+			if " " in la:
+				la=la.split(" ")
+				id_1=la[0]
+			else: #no author for this entry
+				continue
+
+			if "\t" in lk:
+				id_2,lk=lk.split("\t")
+			else: #no keyword for this entry. the \t was removed by strip() earlier
+				continue
+
+			if id_1!=id_2:
+				raise ValueError("While looking up author infos line id didn't match. There might be an article missing from either id_title_tfidf_score.dat or id_author.dat\n")
+
+			#valid line with data on both side, we record the data
+			authors=la[1:]
+			keywords=[x.split("|")[0] for x in lk.split(" ")]
+			for author in authors:
+				count_authors[author]+=1
+				if author not in author_keywords:
+					author_keywords[author]=Counter()
+				for keyword in keywords:
+					author_keywords[author][keyword]+=1
+	
+	print(count_authors.most_common(100))
+	print(len(count_authors.keys()))
+	exit()
+	#for tests, get the id of words
+	words={}
+	for key in words_id_title:
+		words[words_id_title[key]]=key
+
+	#select the top N keywords for each authors
+	for author in author_keywords:
+		top=author_keywords[author].most_common(5)
+		if top[0][1]>4:
+			truc=[]
+			for word,value in top:
+				word=words[int(word)]
+				truc.append(word)
+			print(truc)
+
 
 
 def idf_acm():

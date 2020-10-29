@@ -854,15 +854,15 @@ def extract_acm():
 	open(out_folder+"id_author_glove.dat",mode="w",encoding="utf-8") as f_glove:
 		for author in sorted(count_authors):
 			how_many_papers=count_authors[author]
-			keywords_out=[] #words id
-			keywords_check=[]#words content, just to quickly idiot-check the result. not actually used for the output
+			keywords_out_id=[] #words numerical id
+			keywords_out_content=[]#words text content
 
 			if how_many_papers>10: #we select the keywords that appear across several papers
 				top=author_keywords_n[author].most_common(n)
 				for word,value in top:
-					keywords_out.append(word)
+					keywords_out_id.append(word)
 					word=words[int(word)]
-					keywords_check.append(word)
+					keywords_out_content.append(word)
 
 			else : #we select the keywords with the best tf-idf score
 				pairs=author_keywords_score[author]
@@ -870,21 +870,21 @@ def extract_acm():
 				for keyword in sorted(pairs, key=pairs.get, reverse=False)[:n]:
 					top.append(keyword)
 				for keyword in top:
-					keywords_out.append(keyword)
-					keywords_check.append(words[int(keyword)])
-			#print(how_many_papers,"\t",keywords_check)
+					keywords_out_id.append(keyword)
+					keywords_out_content.append(words[int(keyword)])
+			#print(how_many_papers,"\t",keywords_out_content)
 
 			#doc2vec
 			if doc2vec_training_pass:
-				doc2vec_training_documents.append(TaggedDocument(keywords_out,str(author))) #for some reason author needs to be a string here
+				doc2vec_training_documents.append(TaggedDocument(keywords_out_id,str(author))) #for some reason author needs to be a string here
 			else:
-				document_vector=model_authors.infer_vector(keywords_out)
+				document_vector=model_authors.infer_vector(keywords_out_id)
 				document_vector=[str(x) for x in document_vector] #convert int to str to be able to print
 				document_vector=" ".join(document_vector)
 				f_d2v.write(str(author)+"\t"+document_vector+"\n")
 
 			#glove
-			vector=text_to_glove(keywords_out,glove_vectors,n,glove_dimensions)
+			vector=text_to_glove(keywords_out_content,glove_vectors,n,glove_dimensions)
 			f_glove.write(str(author)+"\t"+" ".join(vector)+"\n")
 
 	#training doc2vec
@@ -895,7 +895,11 @@ def extract_acm():
 
 
 def text_to_glove(text,glove_vectors,max_word_len=150,dimensions=50):
-	"""convert a list of words into a concatenation of their glove embedding. glove_vectors is dict[word]=vector. must be obtained from the output of glove itself. text is an already tokenised text, either a list of words or a string of space separated words"""
+	"""convert a list of words into a concatenation of their glove embedding.
+	glove_vectors is dict[word]=vector. must be obtained from the output of glove itself.
+	text is an already tokenised text, either a list of words or a string of space separated words
+	max_word_len is the number of words wanted. text will be either cut or padded to match this number of words
+	dimensions is the number of dimensions of the vector, i.e. how many numbers per word we get"""
 
 	if type(text)==str:
 		text=text.split(" ")

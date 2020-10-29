@@ -567,9 +567,9 @@ def correct_acm_entry():
 def extract_acm():
 	"""main function if the corpus is acm"""
 
-	skip=False #if I'm working on something I might deactivate some parts of the code to save time. turn this to False for the code to run everything
+	skip=True #if I'm working on something I might deactivate some parts of the code to save time. turn this to False for the code to run everything
 
-	out_folder="/home/sam/work/corpora/acm output"
+	out_folder="/home/sam/work/corpora/acm output/"
 
 	make_vocabulary=False #alter the behaviour of the whole script. Instead of the normal output, outputs vocabulary files (word lists). Must be done once before normal use, to generate "words_title.txt" and "words_abstract.txt"
 
@@ -582,7 +582,6 @@ def extract_acm():
 	glove_max_word_len=150 #max number of words in an article. every article is padded/cut with 0s to match this length
 	if only_keep_top_words:
 		glove_max_word_len=top_words_amount
-	glove_max_word_len=glove_max_word_len*glove_dimensions
 
 	#load idf
 	idf=utilsperso.finish_idf("acm_idf_title_abstract.pickle") #make it with idf_acm()
@@ -621,12 +620,13 @@ def extract_acm():
 	#doc2vec
 	from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 	documents_training=[] #used once on first pass to train doc2vec. not needed in normal use
-	doc2vec_training_pass=False #if this the first, training pass, or not ?
+	doc2vec_training_pass=False #if this the first, training pass, or not ? TODO automate that switch
 	if not doc2vec_training_pass:
 		try:
 			model50=Doc2Vec.load("doc2vec_model_50")
 			model100=Doc2Vec.load("doc2vec_model_100")
 			model300=Doc2Vec.load("doc2vec_model_300")
+			model_authors=Doc2Vec.load("doc2vec_model_authors")
 		except FileNotFoundError:
 			raise FileNotFoundError("doc2vec trained model not found. Have you trained the model first ? If you are attempting to train the model now, disable the attempt to load the model (just this try/except structure)")
 
@@ -741,46 +741,8 @@ def extract_acm():
 
 
 						###glove
-						article_vector=[] #a flat list of all vectors. each word is multiple vectors, they're not kept in sub-lists.
-						for word in text2:
-							if len(article_vector)>glove_max_word_len: #if the text is too long,stop when we have reached the max amount of words
-								#glove_max_word_len is already multiplied by the number of dimensions
-								break
-
-							#try to find the word in our vocabulary, and add corresponding vector to article_vector if available. otherwise, add a zero vector in the missing word place
-							#this code attempts to find missing words by more tokenisation, so some words may be cut into several words. that's why we add the word_vector to the article_vector inside the if/else structure, and not at the end of it, to keep the number of words correct
-							if word in glove_vectors: #normal case, we find the word no problem
-								word_vector=glove_vectors[word]
-								article_vector+=word_vector
-							else: #word is out of vocabulary
-								#try with different tokenisation
-								#if we don't find at least one word that way, we don't keep the further tokenisation and just add ONE zero vector, in order to avoid having MORE zero words
-								if " " in word:
-									words=word.split(" ")
-									tmp_vector=[]
-									at_least_one_found=False
-									for word in words:
-										if word in glove_vectors:
-											word_vector=glove_vectors_[word]
-											at_least_one_found=True
-										else:
-											word_vector=[0.0]*glove_dimensions
-										tmp_vector+=word_vector
-									if at_least_one_found:
-										document_vector+=tmp_vector
-									else: #we add just one word worth of zeroes
-										word_vector=[0.0]*glove_dimensions
-										document_vector+=word_vector
-								else:
-									word_vector=[0.0]*glove_dimensions
-									article_vector+=word_vector
-
-						#glove : we're done collecting vectors for each word
-						while len(article_vector)<glove_max_word_len: #if the text is too short, pad with zeroes until we reach the max amount of words
-							word_vector=[0.0]*glove_dimensions
-							article_vector+=word_vector
-						article_vector=[str(x) for x in article_vector] #to be able to write to output file. " ".join() doesn't work on int
-						f_glove.write(str(id_)+"\t"+(" ".join(article_vector))+"\n")
+						article_vector=text_to_glove(text2,glove_vectors,glove_max_word_len,glove_dimensions)
+						f_glove.write(str(id_)+"\t"+" ".join(article_vector)+"\n")
 
 						### doc2vec
 						if doc2vec_training_pass : #training, on first pass only
@@ -788,7 +750,7 @@ def extract_acm():
 						else: #produce document vectors, normal use
 							for model,f in [(model50,f_doc2vec50),(model100,f_doc2vec100),(model300,f_doc2vec300)]:
 								document_vector=model.infer_vector(text)
-								document_vector=[str(x) for x in document_vector]
+								document_vector=[str(x) for x in document_vector] #convert int to str to be able to print
 								document_vector=" ".join(document_vector)
 								f.write(id_+"\t"+document_vector+"\n")
 					#end of for line loop
@@ -806,7 +768,7 @@ def extract_acm():
 	
 	sys.stderr.write("\n")
 		
-	if make_vocabulary: #only on first pass. makes a list of encountered words, so we can make a word index as small as possible
+	if make_vocabulary and not skip: #only on first pass. makes a list of encountered words, so we can make a word index as small as possible
 		with open("words_title.txt",mode="w",encoding="utf-8") as f:
 			for word in title_word_list:
 				f.write(word+"\n")
@@ -815,24 +777,30 @@ def extract_acm():
 				f.write(word+"\n")
 		return
 
-	if doc2vec_training_pass:
+	if doc2vec_training_pass and not skip:
 		model = Doc2Vec(documents_training, vector_size=300, window=4, min_count=1, workers=4) #workers=number of cores on the machine, for multithreading
 		model.delete_temporary_training_data(keep_doctags_vectors=True, keep_inference=True) #makes it impossible to further train, but reduce size of file
 		model.save("doc2vec_model_300")
 
 
 	###author info
+	#select top keywords of all authors and outputs doc2vec and glove of those keywords
 
-	#find all keywords of all authors. We don't care about each keyword's score, we just register in how many papers each keyword appear
+	#we have two separate ways to select the top keywords :
 	author_keywords_score={} #dict[author]=dict of keywords/score pairs. records the tf-idf of each keyword. if it appears in several papers, keep the top keyword. intended for authors with low amount of papers.
 	author_keywords_n={} #dict[author]=Counter of keywords. records in how many different papers each keyword appear. intended for authors with several papers.
-	count_authors=Counter()
+	count_authors=Counter() #how many papers per author. used to choose which of the 2 above methods is used for each author
+	n=20 #how many keywords per author to consider
+
+	#iterates over papers to collect each author's keywords
 	with open(out_folder+"/id_abstract_tfidf_score.dat",mode="r",encoding="utf-8") as f_matrix,\
 	open("/home/sam/work/corpora/acm/id_author.dat",mode="r",encoding="utf-8") as f_authors:
 		for lk,la in zip(f_matrix, f_authors):
+			#iterate over papers. lk has the keywords of this paper. la has the authors of this paper.
 			lk=lk.strip()
 			la=la.strip()
 
+			#check if there's data in this entry
 			if " " in la:
 				la=la.split(" ")
 				id_1=la[0]
@@ -849,23 +817,18 @@ def extract_acm():
 
 			#valid line with data on both side, we record the data
 			authors=la[1:]
-			keywords_scores=[x.split("|") for x in lk.split(" ")] #list of 2 element lists : keyword id + its score
+			keywords_scores=[x.split("|") for x in lk.split(" ")] #list of 2-element-lists : keyword id + its score
 			for author in authors:
+				author=int(author) #so they sort correctly
 				count_authors[author]+=1
-				if author not in author_keywords_n:
+				if author not in author_keywords_n: #init
 					author_keywords_n[author]=Counter()
 					author_keywords_score[author]={}
 
-				seen=set([])
 				scores={}
 				for keyword,score in keywords_scores:
-				#	#author_keywords_n : count in how many papers each keyword appear. this tends to select generic words, so we only keep the top 10 words by tf-idf for each paper, and count in how many papers those appear
-				#	if keyword not in seen: #we
-				#		author_keywords_n[author][keyword]+=1
-				#	seen.add(keyword)
-				#	#find the top 5 keywords by score for this paper
 					scores[score]=keyword
-				top=sorted(scores.keys(),reverse=True)[:10]#top 5 keywords
+				top=sorted(scores.keys(),reverse=True)[:20]#top n keywords for this article. this is different than variable 'n' which selects how many keywords to keep out of all the keywords of all the papers for this author. This number should be equal or higher than n
 				for score in top:
 					keyword=scores[score]
 					author_keywords_n[author][keyword]+=1
@@ -878,34 +841,108 @@ def extract_acm():
 						author_keywords_score[author][keyword]=score
 	
 	
-	#for tests, get the id of words. allows me to see which words were selected easily
-	#reverse words_id_abstract
+	#for tests only, get the id of words. allows me to see which words were selected easily, to idiot-check them
 	words={}
 	for word in words_id_abstract:
 		id_word=words_id_abstract[word]
 		words[id_word]=word
 	
-	for author in count_authors:
-		how_many_papers=count_authors[author]
-		if how_many_papers>10: #we select the keywords that appear across several papers
+	#select which keywords to keep + doc2vec + output result
+	doc2vec_training_documents=[]
 
-			top=author_keywords_n[author].most_common(5)
-			truc=[]
-			for word,value in top:
-				word=words[int(word)]
-				truc.append(word)
-				truc.append(value)
-		else : #we select the keywords with the best tf-idf score
-			pairs=author_keywords_score[author]
-			top=[]
-			for keyword in sorted(pairs, key=pairs.get, reverse=False)[:5]:
-				top.append(keyword)
-			keywords=[]
-			for keyword in top:
-				keywords.append(words[int(keyword)])
-			print(how_many_papers,"\t",keywords)
+	with open(out_folder+"id_author_doc2vec.dat",mode="w",encoding="utf-8") as f_d2v,\
+	open(out_folder+"id_author_glove.dat",mode="w",encoding="utf-8") as f_glove:
+		for author in sorted(count_authors):
+			how_many_papers=count_authors[author]
+			keywords_out=[] #words id
+			keywords_check=[]#words content, just to quickly idiot-check the result. not actually used for the output
+
+			if how_many_papers>10: #we select the keywords that appear across several papers
+				top=author_keywords_n[author].most_common(n)
+				for word,value in top:
+					keywords_out.append(word)
+					word=words[int(word)]
+					keywords_check.append(word)
+
+			else : #we select the keywords with the best tf-idf score
+				pairs=author_keywords_score[author]
+				top=[]
+				for keyword in sorted(pairs, key=pairs.get, reverse=False)[:n]:
+					top.append(keyword)
+				for keyword in top:
+					keywords_out.append(keyword)
+					keywords_check.append(words[int(keyword)])
+			#print(how_many_papers,"\t",keywords_check)
+
+			#doc2vec
+			if doc2vec_training_pass:
+				doc2vec_training_documents.append(TaggedDocument(keywords_out,str(author))) #for some reason author needs to be a string here
+			else:
+				document_vector=model_authors.infer_vector(keywords_out)
+				document_vector=[str(x) for x in document_vector] #convert int to str to be able to print
+				document_vector=" ".join(document_vector)
+				f_d2v.write(str(author)+"\t"+document_vector+"\n")
+
+			#glove
+			vector=text_to_glove(keywords_out,glove_vectors,n,glove_dimensions)
+			f_glove.write(str(author)+"\t"+" ".join(vector)+"\n")
+
+	#training doc2vec
+	if doc2vec_training_pass:
+		model = Doc2Vec(doc2vec_training_documents, vector_size=50, window=5, min_count=1, workers=4) #workers=number of cores on the machine, for multithreading
+		model.delete_temporary_training_data(keep_doctags_vectors=True, keep_inference=True) #makes it impossible to further train, but reduce size of file
+		model.save("doc2vec_model_authors")
 
 
+def text_to_glove(text,glove_vectors,max_word_len=150,dimensions=50):
+	"""convert a list of words into a concatenation of their glove embedding. glove_vectors is dict[word]=vector. must be obtained from the output of glove itself. text is an already tokenised text, either a list of words or a string of space separated words"""
+
+	if type(text)==str:
+		text=text.split(" ")
+	
+	max_word_len=max_word_len*dimensions
+
+	article_vector=[] #a flat list of all vectors. each word is multiple vectors, they're not kept in sub-lists.
+
+	for word in text:
+		if len(article_vector)>max_word_len: #if the text is too long,stop when we have reached the max amount of words
+			#max_word_len is already multiplied by the number of dimensions
+			break
+
+		#try to find the word in our vocabulary, and add corresponding vector to article_vector if available. otherwise, add a zero vector in the missing word place
+		#this code attempts to find missing words by more tokenisation, so some words may be cut into several words. that's why we add the word_vector to the article_vector inside the if/else structure, and not at the end of it, to keep the number of words correct
+		if word in glove_vectors: #normal case, we find the word no problem
+			word_vector=glove_vectors[word]
+			article_vector+=word_vector
+		else: #word is out of vocabulary
+			#try with different tokenisation
+			#if we don't find at least one word that way, we don't keep the further tokenisation and just add ONE zero vector, in order to avoid having MORE zero words
+			if " " in word:
+				words=word.split(" ")
+				tmp_vector=[]
+				at_least_one_found=False
+				for word in words:
+					if word in glove_vectors:
+						word_vector=glove_vectors_[word]
+						at_least_one_found=True
+					else:
+						word_vector=[0.0]*dimensions
+					tmp_vector+=word_vector
+				if at_least_one_found:
+					document_vector+=tmp_vector
+				else: #we add just one word worth of zeroes
+					word_vector=[0.0]*dimensions
+					document_vector+=word_vector
+			else:
+				word_vector=[0.0]*dimensions
+				article_vector+=word_vector
+
+	#glove : we're done collecting vectors for each word
+	while len(article_vector)<max_word_len: #if the text is too short, pad with zeroes until we reach the max amount of words
+		word_vector=[0.0]*dimensions
+		article_vector+=word_vector
+	article_vector=[str(x) for x in article_vector] #to be able to write to output file. " ".join() doesn't work on int
+	return(article_vector)
 
 
 def idf_acm():
@@ -1299,8 +1336,8 @@ def count_sections(source):
 def check_idf():
 	"""standalone function to quickly check the top keywords by tf-idf of any corpus"""
 
-	tfidf_file="/home/sam/work/corpora/acm output/id_abstract_tfidf_score.dat"
-	word_index_file="/home/sam/work/corpora/acm output/resources/words_abstract.txt"
+	tfidf_file="/home/sam/work/corpora/acm output/id_abstract_tfidf_score.dat" #a txt file in the format article_id \ŧ word_id|score word_id|score
+	word_index_file="/home/sam/work/corpora/acm output/resources/words_abstract.txt" #index of the word_id
 	n=10 #how many keywords per entry to display
 
 	words_index={}
@@ -1335,9 +1372,9 @@ if __name__=="__main__":
 	#extract_canceropole("fulltext_tei/all")
 	#extract_acl_anthology("/home/sam/work/corpora/acl","aman_output/acl")
 	#correct_acm_entry()
-	#extract_acm()
+	extract_acm()
 	#idf_acm()
-	check_idf()
+	#check_idf()
 	#bert_test()
 
 	

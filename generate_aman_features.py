@@ -17,6 +17,7 @@ import utilsperso
 import spacy
 import bibtexparser #https://github.com/sciunto-org/python-bibtexparser
 from scipy.sparse import coo_matrix
+import matplotlib.pyplot as plt
 #nlp=spacy.load("en_core_web_sm")
 
 #idf=utilsperso.finish_idf("27_07_tei_idf.pickle") #put here the .pickle file containing an idf
@@ -214,7 +215,6 @@ def bert_test():
 
 	import torch
 	from pytorch_pretrained_bert import BertTokenizer, BertConfig
-	import matplotlib.pyplot as plt
 	import transformers
 	tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 	from tensorflow.keras import models, layers, preprocessing as kprocessing
@@ -567,7 +567,7 @@ def correct_acm_entry():
 def extract_acm():
 	"""main function if the corpus is acm"""
 
-	skip=True #if I'm working on something I might deactivate some parts of the code to save time. turn this to False for the code to run everything
+	skip=False #if I'm working on something I might deactivate some parts of the code to save time. turn this to False for the code to run everything
 
 	out_folder="/home/sam/work/corpora/acm output"
 
@@ -585,10 +585,11 @@ def extract_acm():
 	glove_max_word_len=glove_max_word_len*glove_dimensions
 
 	#load idf
-	idf=utilsperso.finish_idf("22_10_acm_abstract_title.pickle") #make it with idf_acm()
+	idf=utilsperso.finish_idf("acm_idf_title_abstract.pickle") #make it with idf_acm()
 
 	#load word ids, used by several methods
 	#generated with this same script, using option make_vocabulary
+	#both are dict[word content]=word id
 	words_id_title={}
 	with open("/home/sam/work/corpora/acm output/resources/words_title.txt",mode="r",encoding="utf-8") as f:
 		for i,l in enumerate(f):
@@ -823,9 +824,10 @@ def extract_acm():
 	###author info
 
 	#find all keywords of all authors. We don't care about each keyword's score, we just register in how many papers each keyword appear
-	author_keywords={} #dict[author]=Counter of keywords
+	author_keywords_score={} #dict[author]=dict of keywords/score pairs. records the tf-idf of each keyword. if it appears in several papers, keep the top keyword. intended for authors with low amount of papers.
+	author_keywords_n={} #dict[author]=Counter of keywords. records in how many different papers each keyword appear. intended for authors with several papers.
 	count_authors=Counter()
-	with open(out_folder+"/id_title_tfidf_score.dat",mode="r",encoding="utf-8") as f_matrix,\
+	with open(out_folder+"/id_abstract_tfidf_score.dat",mode="r",encoding="utf-8") as f_matrix,\
 	open("/home/sam/work/corpora/acm/id_author.dat",mode="r",encoding="utf-8") as f_authors:
 		for lk,la in zip(f_matrix, f_authors):
 			lk=lk.strip()
@@ -847,31 +849,62 @@ def extract_acm():
 
 			#valid line with data on both side, we record the data
 			authors=la[1:]
-			keywords=[x.split("|")[0] for x in lk.split(" ")]
+			keywords_scores=[x.split("|") for x in lk.split(" ")] #list of 2 element lists : keyword id + its score
 			for author in authors:
 				count_authors[author]+=1
-				if author not in author_keywords:
-					author_keywords[author]=Counter()
-				for keyword in keywords:
-					author_keywords[author][keyword]+=1
-	
-	print(count_authors.most_common(100))
-	print(len(count_authors.keys()))
-	exit()
-	#for tests, get the id of words
-	words={}
-	for key in words_id_title:
-		words[words_id_title[key]]=key
+				if author not in author_keywords_n:
+					author_keywords_n[author]=Counter()
+					author_keywords_score[author]={}
 
-	#select the top N keywords for each authors
-	for author in author_keywords:
-		top=author_keywords[author].most_common(5)
-		if top[0][1]>4:
+				seen=set([])
+				scores={}
+				for keyword,score in keywords_scores:
+				#	#author_keywords_n : count in how many papers each keyword appear. this tends to select generic words, so we only keep the top 10 words by tf-idf for each paper, and count in how many papers those appear
+				#	if keyword not in seen: #we
+				#		author_keywords_n[author][keyword]+=1
+				#	seen.add(keyword)
+				#	#find the top 5 keywords by score for this paper
+					scores[score]=keyword
+				top=sorted(scores.keys(),reverse=True)[:10]#top 5 keywords
+				for score in top:
+					keyword=scores[score]
+					author_keywords_n[author][keyword]+=1
+					if keyword in author_keywords_score[author]:
+						#we overwrite the previous record only if the score is higher
+						if score > author_keywords_score[author][keyword]:
+							author_keywords_score[author][keyword]=score
+					else:
+						#new keyword, we register regardless of score
+						author_keywords_score[author][keyword]=score
+	
+	
+	#for tests, get the id of words. allows me to see which words were selected easily
+	#reverse words_id_abstract
+	words={}
+	for word in words_id_abstract:
+		id_word=words_id_abstract[word]
+		words[id_word]=word
+	
+	for author in count_authors:
+		how_many_papers=count_authors[author]
+		if how_many_papers>10: #we select the keywords that appear across several papers
+
+			top=author_keywords_n[author].most_common(5)
 			truc=[]
 			for word,value in top:
 				word=words[int(word)]
 				truc.append(word)
-			print(truc)
+				truc.append(value)
+		else : #we select the keywords with the best tf-idf score
+			pairs=author_keywords_score[author]
+			top=[]
+			for keyword in sorted(pairs, key=pairs.get, reverse=False)[:5]:
+				top.append(keyword)
+			keywords=[]
+			for keyword in top:
+				keywords.append(words[int(keyword)])
+			print(how_many_papers,"\t",keywords)
+
 
 
 
@@ -881,26 +914,15 @@ def idf_acm():
 	documents=[]
 
 	try:
-		with open("aman git/acm/id_abstract.dat",mode="r",encoding="utf-8") as f:
+		with open("/home/sam/work/corpora/acm/id_title_abstract_prep.dat",mode="r",encoding="utf-8") as f:
 			for l in f:
-				l=re.sub("^\n+ '","",l) #removes the numerical id at the start of each line + opening '
-				l=l[:-1] #removes ending ' at the end of the line
+				l=l.split("\t")[1]#removes the numerical id at the start of each line + opening '
 				l=l.strip()
-
-				#preprocessing
-				text=utilsperso.preprocess_text(l)
-				text2=[]
-				for token in text:
-					if token.pos_=="NUM":
-						text2.append("NUM")
-					else:
-						text2.append(token.lemma_)
-				text=" ".join(text2)
-				documents.append(text)
+				documents.append(l)
 	except KeyboardInterrupt:
 		pass
 
-	utilsperso.edit_idf(documents,filetype="raw_text",idf_file="acm_idf.pickle")
+	utilsperso.edit_idf(documents,filetype="raw_text",idf_file="acm_idf_title_abstract.pickle")
 	return
 
 
@@ -1274,11 +1296,48 @@ def count_sections(source):
 	for key in sorted(titles, key=titles.get, reverse=True):
 		print(key+"\t"+str((titles[key])/float(i_articles)*100)[:2]+"%")
 
+def check_idf():
+	"""standalone function to quickly check the top keywords by tf-idf of any corpus"""
+
+	tfidf_file="/home/sam/work/corpora/acm output/id_abstract_tfidf_score.dat"
+	word_index_file="/home/sam/work/corpora/acm output/resources/words_abstract.txt"
+	n=10 #how many keywords per entry to display
+
+	words_index={}
+	with open(word_index_file,mode="r",encoding="utf-8") as f:
+		for i,l in enumerate(f):
+			l=l.strip()
+			words_index[int(i)]=l
+
+	with open(tfidf_file,mode="r",encoding="utf-8") as f:
+		for l in f:
+			l=l.strip()
+			if "\t" in l:
+				id_,l=l.split("\t")
+			else: #no keyword for this entry. the \t was removed by strip() earlier
+				continue
+			keywords_scores=[x.split("|") for x in l.split(" ")] #list of 2 element lists : keyword id + its score
+			scores={}
+			for keyword, score in keywords_scores:
+				scores[score]=keyword
+			top=sorted(scores.keys(),reverse=True)[:n]#top n keywords
+			top_words=[]
+			for score in top:
+				word_id=scores[score]
+				word=words_index[int(word_id)]
+				top_words.append(word)
+			print(top_words)
+				
+
+				
+
 if __name__=="__main__":
 	#extract_canceropole("fulltext_tei/all")
 	#extract_acl_anthology("/home/sam/work/corpora/acl","aman_output/acl")
 	#correct_acm_entry()
-	extract_acm()
+	#extract_acm()
+	#idf_acm()
+	check_idf()
 	#bert_test()
 
 	

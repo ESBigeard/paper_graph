@@ -316,7 +316,7 @@ def _clean_section_title(string):
 	if string=="acknowledgment":
 		string="acknowledgement"
 	
-	string=re.sub("futurework","future work")
+	string=re.sub("futurework","future work",string)
 	
 	if string=="summary":
 		string="abstract"

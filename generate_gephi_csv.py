@@ -423,7 +423,7 @@ def print_csv_for_gephi(root_directory,option_used_text="fulltext",option_prune_
 					previous_id+=1
 					article_id=previous_id
 					abstract=soup.abstract.getText() #to display to the user on the left column
-					url="elisebigeard.yo.fr/gephi_files/fulltexts/"+fname[:-7]+"html"
+					url="../fulltexts/"+fname[:-7]+"html"
 					if option_communities:
 						a=fname.replace(" ","")
 						if a in comunities:

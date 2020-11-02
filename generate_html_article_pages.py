@@ -44,7 +44,7 @@ def print_html_keywords_keysentences(fname):
 		output+="</head><body>"
 		output+="<p>"+fname+"</p>"
 		fname2=re.split("\.",fname)[0]
-		output+="<p><a href='http://elisebigeard.yo.fr/gephi_files/pdf_files/"+fname2+".pdf' class='pdf_link'>See PDF</a></p>"
+		output+="<p><a href='../pdf_files/"+fname2+".pdf' class='pdf_link'>See PDF</a></p>"
 
 		lines="".join(f.readlines())
 		soup=BeautifulSoup(lines,"xml")
@@ -229,7 +229,7 @@ def print_html_keywords_keysentences(fname):
 if __name__=="__main__":
 
 	out_directory="paper_pages"
-	directory="fulltext_tei"
+	directory="fulltext_tei/all"
 	for fname in os.listdir(directory):
 		if fname.endswith(".xml"):
 			print("processing "+fname)

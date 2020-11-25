@@ -45,6 +45,8 @@ citation recommendation = focus on a short part of a paper, only a few sentences
 
 paper recommendation = Input is a whole paper, or several papers, or more. Intended to suggest papers to a researcher in a more general context
 
+* [DBLP + abstracts citation network corpus](https://www.aminer.org/dblp_citation) **corpus**
+
 * [Citation Recommendation: Approaches and Datasets](https://arxiv.org/abs/2002.06961) 2020 **review**
 
 

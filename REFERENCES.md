@@ -117,3 +117,5 @@ paper recommendation = Input is a whole paper, or several papers, or more. Inten
     
 
 * [Citation-Enhanced Keyphrase Extraction from Research Papers: A Supervised Approach](https://www.aclweb.org/anthology/D14-1150/) 2014
+
+* [corpus pubmed fulltext](https://www.ncbi.nlm.nih.gov/pmc/tools/openftlist/) [download link](https://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_bulk/)

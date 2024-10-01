@@ -3,7 +3,7 @@
 # Paper Graph
 Dev/tools repo for a project about scientific papers mining to construct graphs
 
-The tool used to convert PDF articles into TEI XML files is [Grobit][https://github.com/kermitt2/grobid].
+The tool used to convert PDF articles into TEI XML files is [Grobit](https://github.com/kermitt2/grobid).
 
 
 ## Working pipeline
